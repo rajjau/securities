@@ -10,7 +10,7 @@ from sys import argv
 ######################
 from download import main as download
 from features import main as features
-from modules.combine import main as combine
+from modules.combine_json import main as combine_json
 from modules.is_dir import main as is_dir
 from modules.messages import msg_info,msg_warn
 
@@ -78,7 +78,7 @@ def update(dir_data, filename_last, dates, filename_raw_csv, filename_features_c
         # Copy the existing file to the new output filename.
         copy(filename_last, filename_raw_csv)
         # Combine the data for all filenames.
-        combine(filenames = filenames_json, filename_output = filename_raw_csv)
+        combine_json(filenames = filenames_json, filename_output = filename_raw_csv)
         # Display informational message to stdout.
         msg_info(f"Done. Combined raw data written to the output file: '{filename_raw_csv}'")
         # Add features.

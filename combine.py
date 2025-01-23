@@ -5,7 +5,7 @@ from sys import argv
 ######################
 ### CUSTOM MODULES ###
 ######################
-from modules.combine import main as combine
+from modules.combine_json import main as combine_json
 from modules.messages import msg_info
 
 #################
@@ -32,7 +32,7 @@ def main(dir_data, filename_output):
     # Find all JSON files located within the $dir_data directory.
     filenames = sorted([filename for filename in Path(dir_data).iterdir() if filename.is_file() and filename.suffix == '.json'])
     # Combine the data for all filenames.
-    combine(filenames = filenames, filename_output = filename_output)
+    combine_json(filenames = filenames, filename_output = filename_output)
     # Display informational message to stdout.
     msg_info(f"Done. All data has been written to the output file: '{filename_output}'")
 
