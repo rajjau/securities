@@ -8,8 +8,8 @@ from sys import argv
 ######################
 ### CUSTOM MODULES ###
 ######################
-from _1_download import main as download
-from _3_features import main as features
+from download import main as download
+from features import main as features
 from modules.combine import main as combine
 from modules.is_dir import main as is_dir
 from modules.messages import msg_info,msg_warn
