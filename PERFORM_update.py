@@ -8,8 +8,8 @@ from sys import argv
 ######################
 ### CUSTOM MODULES ###
 ######################
-from download import main as download
-from features import main as features
+from PRE_1_download import main as download
+from PRE_3_features import main as features
 from modules.combine_json import main as combine_json
 from modules.is_dir import main as is_dir
 from modules.messages import msg_info,msg_warn
