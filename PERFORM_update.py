@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 from datetime import datetime, timedelta
-from pandas import concat,read_csv,to_datetime
+from pandas import read_csv,to_datetime
 from pathlib import Path
 from shutil import copy
 from sys import argv
