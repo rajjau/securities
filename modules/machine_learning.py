@@ -154,7 +154,7 @@ def saved_model_filename(name, symbols):
     # Check if the user has opted to train for all symbols.
     if symbols is False:
         # If so, then set the filename for the current learner.
-        filename = f"{name}_{timestamp}.pkl"
+        filename = f"{name}_{timestamp}.joblib"
     else:
         # Otherwise, if there are a list if symbols the learner is specific to, then join the symbols via underscores.
         symbols = '_'.join(symbols)
