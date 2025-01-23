@@ -1,6 +1,5 @@
 #!/usr/bin/env python
-from numpy import nan
-from pandas import concat,DataFrame,to_datetime,unique
+from pandas import Timedelta,to_datetime
 
 ######################
 ### CUSTOM MODULES ###
@@ -35,18 +34,30 @@ def time(data):
     data['t_d'] = timestamps.dt.date
     # Add the day of week.
     data['t_w'] = timestamps.dt.day_name()
+    # Add the previous day of the week name as well.
+    data['t_w_p'] = (timestamps - Timedelta(days = 1)).dt.day_name()
     # Return the $data.
     return(data)
 
-def previous_open_and_close(data):
+def previous_day(data):
     # Display informational message to stdout.
-    msg_info('Feature: Adding previous day opening and closing values.')
+    msg_info('Feature: Adding values from the previous day.')
     # Sort the DataFrame by the symbol name and timestamp. This groups stocks and ensures the data for a given stock is in order from earliest to most recent.
     data = data.sort_values(by = ['T', 't'])
     # Add the previous day's closing value.
     data['c_p'] = data.groupby('T')['c'].shift(1)
+    # Add the previous day's highest price value.
+    data['h_p'] = data.groupby('T')['h'].shift(1)
+    # Add the previous day's lowest price value.
+    data['l_p'] = data.groupby('T')['l'].shift(1)
+    # Add the previous day's number of transactions.
+    data['n_p'] = data.groupby('T')['n'].shift(1)
     # Add the previous day's opening value.
     data['o_p'] = data.groupby('T')['o'].shift(1)
+    # Add the previous day's volume.
+    data['v_p'] = data.groupby('T')['v'].shift(1)
+    # Add the previous day's volume weighted averaged price.
+    data['vw_p'] = data.groupby('T')['vw'].shift(1)
     # Return the $data.
     return(data)
 
@@ -58,7 +69,7 @@ def main(data):
     data = open_to_close(data)
     # Calculate the different aspects of time for each row based on the timestamp ('t') value.
     data = time(data)
-    # Add the previous day's opening and closing values.
-    data = previous_open_and_close(data)
+    # Add the values from the previous day.
+    data = previous_day(data)
     # Return the modified $data.
     return(data)
