@@ -17,7 +17,7 @@ from modules.train_test_split import main as train_test_split
 ### SETTINGS ###
 ################
 # Define the name of all feature columns (X).
-COLUMNS_X = ['c_p', 'h', 'l', 'n', 'o', 'o_p', 't_w', 'v', 'vw']
+COLUMNS_X = ['c_p', 'h_p', 'l_p', 'n_p', 'o', 'o_p', 't_w', 't_w_p', 'v', 'v_p', 'vw_p']
 #
 # Define the name of the label (y).
 COLUMNS_Y = ['o_c']
@@ -25,8 +25,8 @@ COLUMNS_Y = ['o_c']
 # Define the total number of days to holdout for the test set.
 HOLDOUT_DAYS = 60
 #
-# Define the columns to perform one-hot encoding to.
-COLUMNS_ONE_HOT_ENCODING = ['t_w']
+# Define the column(s) to perform one-hot encoding to.
+COLUMNS_ONE_HOT_ENCODING = ['t_w', 't_w_p']
 
 #################
 ### FUNCTIONS ###
@@ -100,7 +100,7 @@ def main(filename, symbols):
     #------------#
     # Read and prepare data for ML.
     data = import_data(filename = filename, symbols = symbols)
-    # Split the $data into training and testing sets, where the test set is the final X days from the $data.
+    # Split the $data into training and testing sets, where the test set is the final X days from the $data. Additionally, the columns are normalized.
     [X_train, X_test, y_train, y_test] = train_test_split(data = data, columns_x = COLUMNS_X, columns_y = COLUMNS_Y, holdout_days = HOLDOUT_DAYS, normalize_X = True)
     #-------------------------#
     #--- Feature Selection ---#
