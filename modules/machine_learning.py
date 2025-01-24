@@ -4,7 +4,7 @@ from numpy import arange
 from pathlib import Path
 from sklearn.exceptions import FitFailedWarning
 from sklearn.metrics import f1_score
-from sklearn.model_selection import cross_val_score, GridSearchCV, StratifiedKFold
+from sklearn.model_selection import cross_val_score, GridSearchCV, StratifiedKFold, TimeSeriesSplit
 from warnings import filterwarnings
 #-------------------#
 #--- CLASSIFIERS ---#
@@ -13,8 +13,7 @@ from sklearn.ensemble import BaggingClassifier
 from sklearn.naive_bayes import GaussianNB
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.linear_model import LogisticRegression
-from sklearn.svm import SVC
+from sklearn.linear_model import LogisticRegression, RidgeClassifier
 
 ######################
 ### CUSTOM MODULES ###
@@ -54,25 +53,16 @@ filterwarnings('ignore', category = UserWarning)
 # Define a dictionary that contains all learners and their hyperparameters to use.
 learners = {}
 # learners['Bagging'] = BaggingClassifier(bootstrap = True, estimator = RandomForestClassifier(n_estimators = 250, random_state = RANDOM_MODEL), n_estimators = 10)
-# learners['K Nearest Neighbor'] = KNeighborsClassifier()
-learners['Logistic Regression'] = LogisticRegression()
+# learners['Logistic Regression'] = LogisticRegression()
 # learners['Naive Bayes'] = GaussianNB()
 # learners['Random Forest'] = RandomForestClassifier()
-# learners['Support Vector Classifier'] = SVC()
-
-# learners['Logistic Regression'] = LogisticRegression(C = 0.3, l1_ratio = 0.5, penalty = 'elasticnet', random_state = RANDOM_MODEL, solver = 'saga')
+learners['Ridge'] = RidgeClassifier()
 
 ####################
 ### GRIDSEARCHCV ###
 ####################
 # Define a dictionary that contains all learners to perform GridSearchCV with.
 learners_gridsearch = {}
-
-learners_gridsearch['K Nearest Neighbor'] = {
-    'algorithm': ['ball_tree', 'brute', 'kd_tree'],
-    'n_neighbors': range(1, 100),
-    'weights': ['distance', 'uniform', None]
-}
 
 learners_gridsearch['Logistic Regression'] = {
     'C': arange(0.05, 1.05, 0.05),
@@ -96,13 +86,14 @@ learners_gridsearch['Random Forest'] = {
     'random_state': [RANDOM_MODEL]
 }
 
-learners_gridsearch['Support Vector Classifier'] = {
-    'C': [100, 50, 10, 1, 0.5, 0.1],
-    'coef0': [1, 0.75, 0.5, 0.25, 0.0],
-    'degree': range(2, 11),
-    'gamma': [1, 0.1, 0.01, 'scale'],
-    'kernel': ['poly', 'rbf', 'sigmoid', 'precomputed'],
-    'random_state': [RANDOM_MODEL]
+learners_gridsearch['Ridge'] = {
+    'alpha': arange(0.05, 1.05, 0.05),
+    'class_weight': ['balanced', None],
+    'copy_X': [True],
+    'max_iter': [None],
+    'random_state': [RANDOM_MODEL],
+    'solver':['auto', 'svd', 'cholesky', 'lsqr', 'sparse_cg', 'sag', 'saga', 'lbfgs'],
+    'tol': [0.1, 0.01, 0.001, 0.0001, 0.00001],
 }
 
 #################
@@ -120,11 +111,13 @@ def hyperparameter_optimization(X_train, y_train, name):
             # Return the defult learner instead.
             return(learners[name])
         # Define a stratified K-fold cross-validation object. Here, the $random_state is set so every time this script is run the same exact data is used, so all models can be properly compared
-        strat_k_fold = StratifiedKFold(n_splits = CROSS_VALIDATION_FOLDS, random_state = RANDOM_TRAIN_TEST_SPLIT, shuffle = True)
+        # strat_k_fold = StratifiedKFold(n_splits = CROSS_VALIDATION_FOLDS, random_state = RANDOM_TRAIN_TEST_SPLIT, shuffle = True)
+        # Define a time series split object.
+        timeseries_k_fold = TimeSeriesSplit(n_splits = CROSS_VALIDATION_FOLDS)
         # Define the learner.
         model = learners[name]
         # Define the GridSearchCV object.
-        model_gscv = GridSearchCV(estimator = model, param_grid = params, cv = strat_k_fold, scoring = 'f1_macro')
+        model_gscv = GridSearchCV(estimator = model, param_grid = params, cv = timeseries_k_fold, scoring = 'f1_macro')
         # Fit the model with all combinations of hyperparameters to the training data.
         model_gscv.fit(X_train, y_train)
         # Identify the model with the best performance.
@@ -134,7 +127,8 @@ def hyperparameter_optimization(X_train, y_train, name):
 
 def cross_validation(model, X, y):
     # Run cross-validation.
-    score_cv = cross_val_score(model, X, y, cv = StratifiedKFold(n_splits = CROSS_VALIDATION_FOLDS, random_state = RANDOM_TRAIN_TEST_SPLIT), scoring = 'f1_macro')
+    # score_cv = cross_val_score(model, X, y, cv = StratifiedKFold(n_splits = CROSS_VALIDATION_FOLDS, random_state = RANDOM_TRAIN_TEST_SPLIT), scoring = 'f1_macro')
+    score_cv = cross_val_score(model, X, y, cv = TimeSeriesSplit(n_splits = CROSS_VALIDATION_FOLDS), scoring = 'f1_macro')
     # Return the cross-validation mean score and standard deviation.
     return(score_cv.mean(), score_cv.std())
 
