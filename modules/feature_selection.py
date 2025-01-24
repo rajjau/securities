@@ -1,14 +1,16 @@
 #!/usr/bin/env python
 from numpy import ravel
 from pandas import Index
-from sklearn.feature_selection import RFE
+from sklearn.feature_selection import RFECV
 from sklearn.feature_selection import SelectKBest
+from sklearn.model_selection import TimeSeriesSplit
 #-------------------#
 #--- CLASSIFIERS ---#
 #-------------------#
+from sklearn.ensemble import VotingClassifier
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.linear_model import LogisticRegression
+from sklearn.linear_model import LogisticRegression, RidgeClassifier
 
 #################
 ### FUNCTIONS ###
@@ -25,7 +27,7 @@ def select_k_best(X, y, feature_names):
 
 def recursive_feature_elimination(X, y, feature_names):
     # Initialize the function.
-    selector = RFE(estimator = LogisticRegression(max_iter = 10000))
+    selector = RFECV(estimator = LogisticRegression(max_iter = 10000), cv = TimeSeriesSplit(n_splits = 5), scoring = 'f1_macro')
     # Fit and transform the training data.
     selector.fit_transform(X = X, y = ravel(y))
     # Define the selected features.
