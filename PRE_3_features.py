@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+from multiprocessing import Pool
+from os import cpu_count
 from pandas import read_csv
 from pathlib import Path
 from sys import argv
@@ -8,6 +10,7 @@ from sys import argv
 ######################
 from modules.add_features import main as add_features
 from modules.is_file import main as is_file
+from modules.messages import msg_info
 
 #################
 ### FUNCTIONS ###
@@ -41,16 +44,24 @@ def main(filename, filename_output):
     data = data.sort_values(by = ['T', 't'])
     # Add various extra features to the $data.
     data = add_features(data)
+    # Message to stdout.
+    msg_info('Sorting all columns in alphabetical order.')
     # Sort the columns in alphabetical order.
     data = data.sort_index(axis = 1)
+    # Message to stdout.
+    msg_info('Removing all rows that contain any NaNs after adding features.')
     # Again, remove all rows that contain any NaNs after adding features.
     data = data.dropna(axis = 0)
-    # # Save the $data with new features to the output file.
+    # Message to stdout.
+    msg_info('Saving data with new features to the output file.')
+    # Save the $data with new features to the output file.
     data.to_csv(filename_output, header = True, index = False, quoting = 1)
 
 #############
 ### START ###
 #############
 if __name__ == '__main__':
+    # Obtain user-defined variables.
     [filename, filename_output] = args()
-    main(filename = filename, filename_output = filename_output)
+    # Start the script.
+    Pool(processes = cpu_count() - 1).apply(main, args = (filename, filename_output))
