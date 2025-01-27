@@ -1,0 +1,22 @@
+I have historical stock data for the past 2 years, which provides daily data. My task is to predict whether the closing price of a stock will be greater than the opening price (class = 1), or not (class = 0). As an overview, my workflow is to first obtain all data from Polygon.io, specifically daily data. This provides the following features for every symbol:
+
+	a) Opening price (‘o’)
+	b) Closing price (‘c’)
+	c) The trading volume for the given time period (‘v’)
+	d) Highest price for the given time period (‘h’)
+	e) Lowest price for the given time period (‘l’)
+	f) Number of transactions within the aggregate window (’n’)
+	g) Volume weighted average price ('vw')
+
+
+For a given symbol, training is performed using the current day's opening price and lagged  features from previous days, up to 5 days total.
+
+Next, features are added such as the day of the week (e.g., ‘Monday’, ‘Tuesday’, etc.) and the class labels for whether the closing price is greater than the opening price, or not. Additionally, lagged features are added for every feature (a-g above) for up to 5 days. Feature engineering is also performed, where the lagged high-low spread and the lagged daily return for all previous days is calculated. Finally, any row was NaNs are removed entirely rather than replacing them. The data is now saved to a CSV file.
+
+Before classification can be performed, preprocessing of the data is completed. This includes One-Hot encoding features with string values such as the day of the week. The data is then split into training and test sets, where  the last 60 days are used as the test set while every other day is used for training.
+
+At this point, feature selection is performed using the recursive feature elimination cross validation (RFECV) function from scikit-learn. Here, 5 fold cross-validation (CV) is performed with either the Logistic Regression, Random Forest, or RidgeClassifierCV classifiers, and the TimeSeriesSplit() function is used for CV with the 'f1_macro' scoring function.
+
+It's now time for machine learning (ML). First, either GridSearchCV or RandomizedSearchCV is used to identify the best hyper-parameters for each of the following classifiers: Logistic Regression, Random Forest, RidgeClassifierCV. Here, TimeSeriesSplit() with the f1_macro scoring function was used for 5-fold CV to identify the best model. 
+
+The best model is then used in CV to calculate its CV score and standard deviation. Again 5-fold TimeSeriesSplit with the f1_macro scoring function was used. Finally, the best model was used on the test set to get the final performance. The score function used was f1_macro.
