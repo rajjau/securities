@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+from multiprocessing import Pool
+from os import cpu_count
 from pandas import read_csv
 from pathlib import Path
 from sys import argv
@@ -16,17 +18,17 @@ from modules.train_test_split import main as train_test_split
 ################
 ### SETTINGS ###
 ################
-# Define the name of all feature columns (X).
-COLUMNS_X = ['c_p', 'h_p', 'l_p', 'n_p', 'o', 'o_p', 't_w', 't_w_p', 'v', 'v_p', 'vw_p']
+# Define the name of all feature columns (X). This does not include all of the 'lagged_' feature columns, which will be added once the data is imported.
+COLUMNS_X = ['day_of_week', 'o', 'v']
 #
 # Define the name of the label (y).
-COLUMNS_Y = ['o_c']
+COLUMNS_Y = ['close_greater_than_open']
 #
 # Define the total number of days to holdout for the test set.
 HOLDOUT_DAYS = 60
 #
 # Define the column(s) to perform one-hot encoding to.
-COLUMNS_ONE_HOT_ENCODING = ['t_w', 't_w_p']
+COLUMNS_ONE_HOT_ENCODING = ['day_of_week', 'lagged_day_of_week']
 
 #################
 ### FUNCTIONS ###
@@ -100,6 +102,8 @@ def main(filename, symbols):
     #------------#
     # Read and prepare data for ML.
     data = import_data(filename = filename, symbols = symbols)
+    # Modify the global variables that define the feature (X) column based on the new 'lagged_' column names.
+    modify_columns_X_y(new_value = COLUMNS_X + [entry for entry in data.columns if entry.startswith('lagged_')], is_X = True)
     # Split the $data into training and testing sets, where the test set is the final X days from the $data. Additionally, the columns are normalized.
     [X_train, X_test, y_train, y_test] = train_test_split(data = data, columns_x = COLUMNS_X, columns_y = COLUMNS_Y, holdout_days = HOLDOUT_DAYS, normalize_X = True)
     #-------------------------#
@@ -123,4 +127,4 @@ if __name__ == '__main__':
     # Obtain user-defined variables.
     [filename, symbols] = args()
     # Start the script.
-    main(filename = filename, symbols = symbols)
+    Pool(processes = cpu_count()).apply(main, args = (filename, symbols))
