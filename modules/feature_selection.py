@@ -7,10 +7,9 @@ from sklearn.model_selection import TimeSeriesSplit
 #-------------------#
 #--- CLASSIFIERS ---#
 #-------------------#
-from sklearn.ensemble import VotingClassifier
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.linear_model import LogisticRegression, RidgeClassifier
+from sklearn.linear_model import LogisticRegression, RidgeClassifierCV
 
 #################
 ### FUNCTIONS ###
@@ -27,7 +26,7 @@ def select_k_best(X, y, feature_names):
 
 def recursive_feature_elimination(X, y, feature_names):
     # Initialize the function.
-    selector = RFECV(estimator = LogisticRegression(max_iter = 10000), cv = TimeSeriesSplit(n_splits = 5), scoring = 'f1_macro')
+    selector = RFECV(estimator = RandomForestClassifier(max_depth = 50, max_features = 'sqrt', n_estimators = 100), cv = TimeSeriesSplit(n_splits = 5), scoring = 'f1_macro')
     # Fit and transform the training data.
     selector.fit_transform(X = X, y = ravel(y))
     # Define the selected features.
