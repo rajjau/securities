@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 from datetime import datetime, timedelta
+from multiprocessing import Pool
+from os import cpu_count
 from pathlib import Path
 from sys import argv
 
@@ -110,4 +112,4 @@ if __name__ == '__main__':
     # Obtain user-defined arguments
     [dir_data, dates] = args()
     # Start the script
-    main(dir_data = dir_data, dates = dates)
+    Pool(processes = cpu_count() - 1).apply(main, args = (dir_data, dates))

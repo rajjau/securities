@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+from multiprocessing import Pool
+from os import cpu_count
 from pathlib import Path
 from sys import argv
 
@@ -43,4 +45,4 @@ if __name__ == '__main__':
     # Obtain user-defined arguments
     [directory, filename_output] = args()
     # Start the script
-    main(dir_data = directory, filename_output = filename_output)
+    Pool(processes = cpu_count() - 1).apply(main, args = (directory, filename_output))
