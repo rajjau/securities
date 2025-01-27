@@ -2,9 +2,10 @@
 from joblib import dump
 from numpy import arange
 from pathlib import Path
+from scipy.linalg import LinAlgWarning
 from sklearn.exceptions import FitFailedWarning
 from sklearn.metrics import f1_score
-from sklearn.model_selection import cross_val_score, GridSearchCV, StratifiedKFold, TimeSeriesSplit
+from sklearn.model_selection import cross_val_score, GridSearchCV, RandomizedSearchCV, TimeSeriesSplit
 from warnings import filterwarnings
 #-------------------#
 #--- CLASSIFIERS ---#
@@ -13,7 +14,7 @@ from sklearn.ensemble import BaggingClassifier
 from sklearn.naive_bayes import GaussianNB
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.linear_model import LogisticRegression, RidgeClassifier
+from sklearn.linear_model import LogisticRegression, RidgeClassifierCV
 
 ######################
 ### CUSTOM MODULES ###
@@ -26,7 +27,7 @@ from modules.messages import msg_info,msg_warn
 ### SETTINGS ###
 ################
 # Total number of folds to use in cross-validation.
-CROSS_VALIDATION_FOLDS = 7
+CROSS_VALIDATION_FOLDS = 5
 #
 #------------------#
 #-- RANDOM STATE --#
@@ -45,6 +46,7 @@ SAVE_THRESHOLD = 0.70
 #--------------#
 # Filter warnings that occurs when using GridSearchCV.
 filterwarnings('ignore', category = FitFailedWarning)
+filterwarnings('ignore', category = LinAlgWarning)
 filterwarnings('ignore', category = UserWarning)
 
 ###################
@@ -55,17 +57,17 @@ learners = {}
 # learners['Bagging'] = BaggingClassifier(bootstrap = True, estimator = RandomForestClassifier(n_estimators = 250, random_state = RANDOM_MODEL), n_estimators = 10)
 # learners['Logistic Regression'] = LogisticRegression()
 # learners['Naive Bayes'] = GaussianNB()
-# learners['Random Forest'] = RandomForestClassifier()
-learners['Ridge'] = RidgeClassifier()
+learners['Random Forest'] = RandomForestClassifier()
+# learners['Ridge CV'] = RidgeClassifierCV()
 
 ####################
 ### GRIDSEARCHCV ###
 ####################
 # Define a dictionary that contains all learners to perform GridSearchCV with.
-learners_gridsearch = {}
+learners_hyperparameters = {}
 
-learners_gridsearch['Logistic Regression'] = {
-    'C': arange(0.05, 1.05, 0.05),
+learners_hyperparameters['Logistic Regression'] = {
+    'C': arange(0.01, 1.01, 0.01),
     'class_weight': ['balanced', None],
     'l1_ratio': arange(0.05, 1.05, 0.05),
     'max_iter': [10000],
@@ -75,25 +77,21 @@ learners_gridsearch['Logistic Regression'] = {
     'tol': [0.1, 0.01, 0.001, 0.0001, 0.00001]
 }
 
-learners_gridsearch['Random Forest'] = {
+learners_hyperparameters['Random Forest'] = {
     'bootstrap': [True, False],
     'class_weight': ['balanced', 'balanced_subsample'],
     'criterion': ['entropy', 'gini', 'log_loss'],
-    'max_depth': [50, 100, None],
+    'max_depth': [10, 50, 100, None],
     'max_features': ['log2', 'sqrt', None],
     'max_leaf_nodes': [10, 100, None],
-    'n_estimators': [100, 250],
+    'n_estimators': [100, 200, 250],
     'random_state': [RANDOM_MODEL]
 }
 
-learners_gridsearch['Ridge'] = {
-    'alpha': arange(0.05, 1.05, 0.05),
+learners_hyperparameters['Ridge CV'] = {
+    'alphas': arange(0.01, 1.01, 0.01),
     'class_weight': ['balanced', None],
-    'copy_X': [True],
-    'max_iter': [None],
-    'random_state': [RANDOM_MODEL],
-    'solver':['auto', 'svd', 'cholesky', 'lsqr', 'sparse_cg', 'sag', 'saga', 'lbfgs'],
-    'tol': [0.1, 0.01, 0.001, 0.0001, 0.00001],
+    'scoring': ['f1_macro']
 }
 
 #################
@@ -104,24 +102,23 @@ def hyperparameter_optimization(X_train, y_train, name):
         msg_info('Hyperparameter optimization is enabled.')
         try:
             # Obtain the parameters from the dictionary defined above.
-            params = learners_gridsearch[name]
+            params = learners_hyperparameters[name]
         except KeyError:
             # If no hyperparameters were defined for $name, then raise an error.
             msg_warn(f"The following learner name has not entries within the GridSearchCV dictionary defined in this script: '{name}'")
             # Return the defult learner instead.
             return(learners[name])
-        # Define a stratified K-fold cross-validation object. Here, the $random_state is set so every time this script is run the same exact data is used, so all models can be properly compared
-        # strat_k_fold = StratifiedKFold(n_splits = CROSS_VALIDATION_FOLDS, random_state = RANDOM_TRAIN_TEST_SPLIT, shuffle = True)
         # Define a time series split object.
         timeseries_k_fold = TimeSeriesSplit(n_splits = CROSS_VALIDATION_FOLDS)
         # Define the learner.
         model = learners[name]
         # Define the GridSearchCV object.
-        model_gscv = GridSearchCV(estimator = model, param_grid = params, cv = timeseries_k_fold, scoring = 'f1_macro')
+        # search = GridSearchCV(estimator = model, param_grid = params, cv = timeseries_k_fold, scoring = 'f1_macro')
+        search = RandomizedSearchCV(estimator = model, param_distributions = params, cv = timeseries_k_fold, scoring = 'f1_macro')
         # Fit the model with all combinations of hyperparameters to the training data.
-        model_gscv.fit(X_train, y_train)
+        search.fit(X_train, y_train)
         # Identify the model with the best performance.
-        best_model = model_gscv.best_estimator_
+        best_model = search.best_estimator_
         # Return the model.
         return(best_model)
 
