@@ -127,4 +127,5 @@ if __name__ == '__main__':
     # Obtain user-defined variables.
     [filename, symbols] = args()
     # Start the script.
-    Pool(processes = cpu_count()).apply(main, args = (filename, symbols))
+    Pool(processes = cpu_count() - 1).apply(main, args = (filename, symbols))
+    # main(filename = filename, symbols = symbols)
