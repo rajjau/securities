@@ -11,10 +11,10 @@ from warnings import filterwarnings
 #--- CLASSIFIERS ---#
 #-------------------#
 from sklearn.ensemble import BaggingClassifier
-from sklearn.naive_bayes import GaussianNB
+from sklearn.tree import DecisionTreeClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.linear_model import LogisticRegression, RidgeClassifierCV
+from sklearn.linear_model import LogisticRegression,RidgeClassifierCV
 
 ######################
 ### CUSTOM MODULES ###
@@ -28,6 +28,10 @@ from modules.messages import msg_info,msg_warn
 ################
 # Total number of folds to use in cross-validation.
 CROSS_VALIDATION_FOLDS = 5
+#
+# List of all learners to use.
+# Default: True (bool; train all learners in the `learners` dictionary defined below).
+USE_LEARNERS = ['Bagging', 'K Nearest Neighbor']
 #
 #------------------#
 #-- RANDOM STATE --#
@@ -54,11 +58,15 @@ filterwarnings('ignore', category = UserWarning)
 ###################
 # Define a dictionary that contains all learners and their hyperparameters to use.
 learners = {}
-# learners['Bagging'] = BaggingClassifier(bootstrap = True, estimator = RandomForestClassifier(n_estimators = 250, random_state = RANDOM_MODEL), n_estimators = 10)
-# learners['Logistic Regression'] = LogisticRegression()
-# learners['Naive Bayes'] = GaussianNB()
+learners['Bagging'] = BaggingClassifier()
+learners['Decision Tree'] = DecisionTreeClassifier()
+learners['K Nearest Neighbor'] = KNeighborsClassifier()
+learners['Logistic Regression'] = LogisticRegression()
 learners['Random Forest'] = RandomForestClassifier()
-# learners['Ridge CV'] = RidgeClassifierCV()
+learners['Ridge CV'] = RidgeClassifierCV()
+
+# If the global variable that determines which learners to use is set to bool False, then use all learners in the above dictionary.
+if USE_LEARNERS is True: USE_LEARNERS = [key for key in learners]
 
 ####################
 ### GRIDSEARCHCV ###
@@ -66,11 +74,40 @@ learners['Random Forest'] = RandomForestClassifier()
 # Define a dictionary that contains all learners to perform GridSearchCV with.
 learners_hyperparameters = {}
 
+learners_hyperparameters['Bagging'] = {
+    'bootstrap': [True, False],
+    'bootstrap_features': [True, False],
+    'estimator': {'Logistic Regression': LogisticRegression()},
+    'n_estimators': [10],
+    'n_jobs': [-1],
+    'random_state': [RANDOM_MODEL]
+}
+
+learners_hyperparameters['Decision Tree'] = {
+    'class_weight': ['balanced', None],
+    'criterion': ['entropy', 'gini', 'log_loss'],
+    'max_depth': [5, 10, 20, 50, 100, None],
+    'max_features': ['log2', 'sqrt', None],
+    'max_leaf_nodes': [5, 10, 20, 50, 100, None],
+    'min_samples_leaf': [1, 2, 5, 10],
+    'min_samples_split': [2, 5, 10, 20],
+    'random_state': [RANDOM_MODEL],
+    'splitter': ['best', 'random']
+}
+
+learners_hyperparameters['K Nearest Neighbor'] = {
+    'algorithm': ['ball_tree', 'brute', 'kd_tree'],
+    'n_jobs': [-1],
+    'n_neighbors': range(1, 25),
+    'weights': ['distance', 'uniform', None]
+}
+
 learners_hyperparameters['Logistic Regression'] = {
     'C': arange(0.01, 1.01, 0.01),
     'class_weight': ['balanced', None],
     'l1_ratio': arange(0.05, 1.05, 0.05),
     'max_iter': [10000],
+    'n_jobs': [None],
     'penalty': ['elasticnet', 'l1', 'l2', None],
     'random_state': [RANDOM_MODEL],
     'solver': ['lbfgs', 'liblinear', 'newton-cg', 'newton-cholesky', 'sag', 'saga'],
@@ -85,6 +122,7 @@ learners_hyperparameters['Random Forest'] = {
     'max_features': ['log2', 'sqrt', None],
     'max_leaf_nodes': [10, 100, None],
     'n_estimators': [100, 200, 250],
+    'n_jobs': [-1],
     'random_state': [RANDOM_MODEL]
 }
 
@@ -108,13 +146,21 @@ def hyperparameter_optimization(X_train, y_train, name):
             msg_warn(f"The following learner name has not entries within the GridSearchCV dictionary defined in this script: '{name}'")
             # Return the defult learner instead.
             return(learners[name])
+        # Check if the current model is the Bagging, which is a meta-estimator.
+        if name == 'Bagging':
+            # Define all estimators.
+            estimators = params['estimator']
+            # Define a list that will replace the current dictionary of estimators. This will include only the estimators with the best parameters that are chosen from hyperparameter optimization.
+            best_estimators = [hyperparameter_optimization(X_train = X_train, y_train = y_train, name = estimator) for estimator in estimators]
+            # Replace the old dictionary with the new list of chosen models.
+            learners_hyperparameters[name]['estimator'] = best_estimators
         # Define a time series split object.
         timeseries_k_fold = TimeSeriesSplit(n_splits = CROSS_VALIDATION_FOLDS)
         # Define the learner.
         model = learners[name]
         # Define the GridSearchCV object.
         # search = GridSearchCV(estimator = model, param_grid = params, cv = timeseries_k_fold, scoring = 'f1_macro')
-        search = RandomizedSearchCV(estimator = model, param_distributions = params, cv = timeseries_k_fold, scoring = 'f1_macro')
+        search = RandomizedSearchCV(estimator = model, n_jobs = -1, param_distributions = params, cv = timeseries_k_fold, scoring = 'f1_macro')
         # Fit the model with all combinations of hyperparameters to the training data.
         search.fit(X_train, y_train)
         # Identify the model with the best performance.
@@ -168,8 +214,8 @@ def save(saved_model, model, score):
 ### MAIN ###
 ############
 def main(X_train, X_test, y_train, y_test, symbols, perform_hyperparameter_optimization = True, perform_cross_validation = True):
-    # Iterate through each model within the learners dictionary.
-    for name in learners:
+    # Iterate through each model within the list of learners.
+    for name in USE_LEARNERS:
         # Display the name of the current model to stdout.
         border(f"Machine Learning: {name}", '><')
         # Display a message to stdout about the threshold for saving a model.
