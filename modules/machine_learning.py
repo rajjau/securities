@@ -14,7 +14,8 @@ from sklearn.ensemble import BaggingClassifier
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.linear_model import LogisticRegression,RidgeClassifierCV
+from sklearn.linear_model import LogisticRegression, RidgeClassifierCV
+from sklearn.svm import SVC
 
 ######################
 ### CUSTOM MODULES ###
@@ -29,9 +30,9 @@ from modules.messages import msg_info,msg_warn
 # Total number of folds to use in cross-validation.
 CROSS_VALIDATION_FOLDS = 5
 #
-# List of all learners to use.
-# Default: True (bool; train all learners in the `learners` dictionary defined below).
-USE_LEARNERS = ['Bagging', 'K Nearest Neighbor']
+# List of all learners to use. Use the format: USE_LEARNERS = ['Name', 'Name1']
+# Default: True (bool; train all learners in the `learners` dictionary defined below). USE_LEARNERS = True
+USE_LEARNERS = ['SVC']
 #
 #------------------#
 #-- RANDOM STATE --#
@@ -64,6 +65,7 @@ learners['K Nearest Neighbor'] = KNeighborsClassifier()
 learners['Logistic Regression'] = LogisticRegression()
 learners['Random Forest'] = RandomForestClassifier()
 learners['Ridge CV'] = RidgeClassifierCV()
+learners['SVC'] = SVC()
 
 # If the global variable that determines which learners to use is set to bool False, then use all learners in the above dictionary.
 if USE_LEARNERS is True: USE_LEARNERS = [key for key in learners]
@@ -77,7 +79,9 @@ learners_hyperparameters = {}
 learners_hyperparameters['Bagging'] = {
     'bootstrap': [True, False],
     'bootstrap_features': [True, False],
-    'estimator': {'Logistic Regression': LogisticRegression()},
+    'estimator': {'Decision Tree': DecisionTreeClassifier(),
+                  'Logistic Regression': LogisticRegression()
+                  },
     'n_estimators': [10],
     'n_jobs': [-1],
     'random_state': [RANDOM_MODEL]
@@ -130,6 +134,20 @@ learners_hyperparameters['Ridge CV'] = {
     'alphas': arange(0.01, 1.01, 0.01),
     'class_weight': ['balanced', None],
     'scoring': ['f1_macro']
+}
+
+learners_hyperparameters['SVC'] = {
+    'C': arange(0.01, 1.01, 0.01),
+    'class_weight': ['balanced', None],
+    'coef0': arange(0.0, 10.01, 0.01),
+    'decision_function_shape': ['ovo', 'ovr'],
+    'degree': arange(1, 10, 1),
+    'gamma': ['scale', 'auto'],
+    'kernel': ['linear', 'poly', 'rbf', 'sigmoid'],
+    'probability': [True],
+    'random_state': [RANDOM_MODEL],
+    'shrinking': [True, False],
+    'tol': [0.1, 0.01, 0.001, 0.0001, 0.00001]
 }
 
 #################
