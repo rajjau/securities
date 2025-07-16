@@ -1,9 +1,11 @@
 #!/usr/bin/env python
+from argparse import ArgumentParser
 from datetime import datetime, timedelta
+from multiprocessing import Pool
+from os import cpu_count
 from pandas import read_csv,to_datetime
 from pathlib import Path
 from shutil import copy
-from sys import argv
 
 ######################
 ### CUSTOM MODULES ###
@@ -11,6 +13,7 @@ from sys import argv
 from PRE_1_download import main as download
 from PRE_3_features import main as features
 from modules.combine_json import main as combine_json
+from modules.is_file import main as is_file
 from modules.is_dir import main as is_dir
 from modules.messages import msg_info,msg_warn
 
@@ -18,28 +21,24 @@ from modules.messages import msg_info,msg_warn
 ### FUNCTIONS ###
 #################
 def args():
-    try:
-        # Argument 1: Directory containing the combined datasets to continue off from.
-        directory_combined = Path(argv[1]).absolute()
-    except IndexError:
-        raise IndexError('Argument 1: Directory that contains the combined CSV files to continue from.')
-    try:
-        # Argument 2: Directory containing all raw data from the source.
-        directory_raw = Path(argv[2]).absolute()
-    except IndexError:
-        raise IndexError('Argument 2: Directory to save new data to. This should be the same directory the existing raw stock data is in.')
-    try:
-        # Argument 3: Output filename.
-        filename_output = Path(argv[3]).absolute()
-    except IndexError:
-        # Obtain today's date and time and subtract one day from it.
-        yesterday = datetime.today() - timedelta(1)
+    # Create an argument parser.
+    parser = ArgumentParser(description = 'Update the raw stock data and prepare it for machine learning.')
+    # Add the arguments to the parser.
+    parser.add_argument('directory_combined', type = Path, help = 'Directory containing the combined datasets to continue off from (e.g., "raw_combined").')
+    parser.add_argument('directory_raw', type = Path, help = 'Directory containing all raw data from the source (e.g., "raw").')
+    parser.add_argument('--output', type = Path, default = None, help = 'Filename to save the final prepared data to. This is the data that will be used for machine learning. Default: data_<yesterday_date>.csv')
+    # Parse the arguments.
+    arguments = parser.parse_args()
+    # Check if the output filename was provided, otherwise set it to a default value.
+    if not arguments.output:
+        # Obtain yesterday's date and format it.
+        yesterday = datetime.today() - timedelta(days = 1)
         # Define the output filename using yesterday's date (in YYYY-MM-DD format).
-        filename_output = Path(f"data_{yesterday.strftime('%Y-%m-%d')}.csv").absolute()
-        # Display a warning message to user that 
-        msg_warn(f"(OPTIONAL) Argument 3: Filename to save the final prepared data to. This is the data that will be used for machine learning. Default: {filename_output}")  
-    # Return user-defined variable(s).
-    return(directory_combined, directory_raw, filename_output)
+        arguments.output = Path(f"data_{yesterday.strftime('%Y-%m-%d')}.csv").absolute()
+        # Display a warning message to user that the default filename will be used.
+        msg_warn(f"(OPTIONAL) --output: Filename to save the final prepared data to. Default: {arguments.output}")
+    # Return the user-defined variables.
+    return(arguments.directory_combined.absolute(), arguments.directory_raw.absolute(), arguments.output.absolute())
 
 def get_final_timestamp(filename):
     # Read the data from the file.
@@ -106,11 +105,11 @@ def main(dir_combined, dir_raw, filename_output):
     timestamp_last = get_final_timestamp(filename = filename_last)
     # Use the final timestamp to determine the age of the data.
     dates = days(last = timestamp_last)
-    # Check if dates have been returned, meaning an update is needed.
-    if dates:
-        # Define the output file for the combined raw CSV contents. This places the output file in the $dir_csv directory with the filename containing the prefix (up to the last underscore) from the $filename_prev name. Today's date is added as well.
-        filename_raw_csv = Path(dir_combined, f"{filename_last.stem.rsplit('_', 1)[0]}_{dates[-1]}.csv")
-        # Download and update the existing data. This will write the new data to the output file.
+    # Define the output file for the combined raw CSV contents. This places the output file in the $dir_csv directory with the filename containing the prefix (up to the last underscore) from the $filename_prev name. Today's date is added as well.
+    filename_raw_csv = Path(dir_combined, f"{filename_last.stem.rsplit('_', 1)[0]}_{dates[-1]}.csv")
+    # Check of the output file already exists.
+    if is_file(filename = filename_raw_csv, exit_on_error = False) is False:
+        # If not, then download and update the existing data. This will write the new data to the output file.
         update(dir_data = dir_raw, filename_last = filename_last, dates = dates, filename_raw_csv = filename_raw_csv, filename_features_csv = filename_output)
 
 #############
@@ -120,4 +119,6 @@ if __name__ == '__main__':
     # Obtain user-defined variables.
     [directory_combined, directory_raw, filename_output] = args()
     # Start the main function.
-    main(dir_combined = directory_combined, dir_raw = directory_raw, filename_output = filename_output)
+    # Start the script.
+    with Pool(processes = cpu_count() - 1) as p: p.apply(main, args = (directory_combined, directory_raw, filename_output,))
+    # main(dir_combined = directory_combined, dir_raw = directory_raw, filename_output = filename_output)
