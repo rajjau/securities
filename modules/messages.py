@@ -3,6 +3,10 @@
 ################
 ### MESSAGES ###
 ################
+def msg_error(msg):
+    print(f"!-- ERROR: {msg}")
+    exit(1)
+
 def msg_info(msg):
     print(f"!-- INFO: {msg}")
 
