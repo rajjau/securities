@@ -14,6 +14,7 @@ from modules.feature_selection import main as feature_selection
 from modules.machine_learning import main as machine_learning
 from modules.messages import msg_info
 from modules.one_hot_encoding import main as one_hot_encoding
+from modules.scaling import UseMinMaxScaler, UseRobustScaler, UseStandardScaler
 from modules.train_test_split import main as train_test_split
 
 ################
@@ -42,6 +43,10 @@ PERFORM_FEATURE_SELECTION = False
 #
 # Choose whether GridSearchCV will be performed for hyperparameter optimization.
 PERFORM_HYPERPARAMETER_OPTIMIZATION = True
+#
+# Choose whether scaling will be performed.
+# Options: False, 'UseMinMaxScaler', 'UseRobustScaler', 'UseStandardScaler'
+PERFORM_SCALING = 'UseStandardScaler'
 
 #################
 ### FUNCTIONS ###
@@ -132,8 +137,24 @@ def main(filename, symbols):
     modify_columns_X_y(new_value = COLUMNS_X + [entry for entry in data.columns if entry.startswith('lagged_')], is_X = True)
     # Calculate the baseline accuracy and display it to stdout.
     calculate_baseline_accuracy(data[COLUMNS_Y].value_counts())
+    #------------------------#
+    #--- Split Train/Test ---#
+    #------------------------#
     # Split the $data into training and testing sets, where the test set is the final X days from the $data. Additionally, the columns are normalized.
     [X_train, X_test, y_train, y_test] = train_test_split(data = data, columns_x = COLUMNS_X, columns_y = COLUMNS_Y, holdout_days = HOLDOUT_DAYS, normalize_X = True)
+    #---------------#
+    #--- Scaling ---#
+    #---------------#
+    # Create a border to denote a process.
+    border('SCALING', border_char = '><')
+    # Check if the user has set scaling to be performed.
+    if PERFORM_SCALING is False:
+        msg_info('Scaling was set to False and will not be performed. Edit this script to change this.')
+    else:
+        msg_info(f"Scaling will be performed using '{PERFORM_SCALING}' for all features.")
+        # [All Features] Scale the training and testing data.
+        X_train = eval(f"{PERFORM_SCALING}(X = X_train)")
+        X_test = eval(f"{PERFORM_SCALING}(X = X_test)")
     #-------------------------#
     #--- Feature Selection ---#
     #-------------------------#
