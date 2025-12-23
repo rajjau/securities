@@ -131,7 +131,7 @@ def hyperparameter_optimization(X_train, y_train, name, cross_validation_folds, 
         # If no hyperparameters were defined for $name, then raise an error.
         msg_warn(f"The following learner name has not entries within the GridSearchCV dictionary defined in this script: '{name}'")
         # Return the defult learner instead.
-        return(learners[name])
+        return learners[name]
     # Check if the current model is the Bagging, which is a meta-estimator.
     if name == 'Bagging':
         # Define all estimators.
