@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 from joblib import dump
-from numpy import arange
+from numpy import arange, inf
 from pathlib import Path
 from scipy.linalg import LinAlgWarning
 from sklearn.exceptions import FitFailedWarning
@@ -79,12 +79,11 @@ learners_hyperparameters['K Nearest Neighbor'] = {
 }
 
 learners_hyperparameters['Logistic Regression'] = {
-    'C': arange(0.01, 1.01, 0.01),
+    'C': [arange(0.01, 1.01, 0.01), inf],
     'class_weight': ['balanced', None],
-    'l1_ratio': arange(0.05, 1.05, 0.05),
+    'l1_ratio': arange(0, 1.05, 0.05),
     'max_iter': [10000],
     'n_jobs': [None],
-    'penalty': ['elasticnet', 'l1', 'l2', None],
     'solver': ['lbfgs', 'liblinear', 'newton-cg', 'newton-cholesky', 'sag', 'saga'],
     'tol': [0.1, 0.01, 0.001, 0.0001, 0.00001]
 }
