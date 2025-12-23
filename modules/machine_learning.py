@@ -138,7 +138,15 @@ def hyperparameter_optimization(X_train, y_train, name, cross_validation_folds, 
         # Define all estimators.
         estimators = params['estimator']
         # Define a list that will replace the current dictionary of estimators. This will include only the estimators with the best parameters that are chosen from hyperparameter optimization.
-        best_estimators = [hyperparameter_optimization(X_train=X_train, y_train=y_train, name=estimator) for estimator in estimators]
+        best_estimators = [
+            hyperparameter_optimization(
+                X_train=X_train, 
+                y_train=y_train, 
+                name=estimator, 
+                cross_validation_folds=cross_validation_folds, 
+                random_state=random_state
+            ) for estimator in estimators
+        ]
         # Replace the old dictionary with the new list of chosen models.
         learners_hyperparameters[name]['estimator'] = best_estimators
     # Define a time series split object.
@@ -151,8 +159,8 @@ def hyperparameter_optimization(X_train, y_train, name, cross_validation_folds, 
     except ValueError:
         pass
     # Define the GridSearchCV object.
-    # search = GridSearchCV(estimator = model, param_grid = params, cv = timeseries_k_fold, scoring = 'f1_macro')
-    search = RandomizedSearchCV(estimator=model, n_jobs=-1, param_distributions=params, cv=timeseries_k_fold, scoring='f1_macro')
+    # search = GridSearchCV(cv=timeseries_k_fold, estimator=model, param_grid=params, random_state=random_state, scoring='f1_macro')
+    search = RandomizedSearchCV(cv=timeseries_k_fold, estimator=model, n_jobs=-1, param_distributions=params, random_state=random_state, scoring='f1_macro')
     # Fit the model with all combinations of hyperparameters to the training data.
     search.fit(X_train, y_train)
     # Identify the model with the best performance.
@@ -162,7 +170,6 @@ def hyperparameter_optimization(X_train, y_train, name, cross_validation_folds, 
 
 def cross_validation(model, X, y, cross_validation_folds):
     """Run cross-validation."""
-    # score_cv = cross_val_score(model, X, y, cv=StratifiedKFold(n_splits=CROSS_VALIDATION_FOLDS, random_state=RANDOM_TRAIN_TEST_SPLIT), scoring='f1_macro')
     score_cv = cross_val_score(model, X, y, cv=TimeSeriesSplit(n_splits=cross_validation_folds), scoring='f1_macro')
     # Return the cross-validation mean score and standard deviation.
     return score_cv.mean(), score_cv.std()
