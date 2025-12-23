@@ -70,6 +70,20 @@ def data_feature_selection(columns_x, X_train, y_train, X_test, perform_feature_
     # Return the training and testing data after feature selection.
     return X_train, X_test
 
+def calculate_average_scores(learner, total_random_seeds, total_score, total_cv_score, total_cv_std):
+    # Calculate the average score for the current $learner across all random seeds.
+    avg_score = total_score / total_random_seeds
+    # Display the average score to stdout.
+    msg_info(f"AVERAGE SCORE FOR {learner.upper()} ACROSS ALL RANDOM SEEDS: {avg_score:.2%}")
+    # If cross-validation was performed, calculate and display the average cross-validation score.
+    if total_cv_score > 0:
+        # Calculate the average cross-validation score for the current $learner across all random seeds.
+        avg_score_cv = total_cv_score / total_random_seeds
+        # Calculate the average cross-validation standard deviation for the current $learner across all random seeds.
+        avg_score_cv_stddev = total_cv_std / total_random_seeds
+        # Display the average cross-validation score with standard deviation to stdout.
+        msg_info(f"AVERAGE CROSS-VALIDATION SCORE FOR {learner.upper()} ACROSS ALL RANDOM SEEDS: {avg_score_cv:.2%} ± {avg_score_cv_stddev:.2%}")
+
 ############
 ### MAIN ###
 ############
@@ -135,8 +149,6 @@ def main(filename):
     use_learners = convert_to_list(string=configuration['ML']['use_learners'], delimiter=',')
     # Define the random seed(s).
     random_seeds = [int(item) for item in convert_to_list(string=configuration['GENERAL']['random_seed'], delimiter=',')]
-    # Total number of random seeds.
-    total_random_seeds = len(random_seeds)
     # Iterate through each random seed.
     for learner in use_learners:
         # Create a border to denote a process.
@@ -172,18 +184,17 @@ def main(filename):
             except TypeError:
                 # If cross-validation was not performed, skip the above step.
                 pass
-        # Calculate the average score for the current $learner across all random seeds.
-        avg_score = total_score / total_random_seeds
-        # Display the average score to stdout.
-        msg_info(f"AVERAGE SCORE FOR {learner.upper()} ACROSS ALL RANDOM SEEDS: {avg_score:.2%}")
-        # If cross-validation was performed, calculate and display the average cross-validation score.
-        if total_cv_score > 0:
-            # Calculate the average cross-validation score for the current $learner across all random seeds.
-            avg_score_cv = total_cv_score / total_random_seeds
-            # Calculate the average cross-validation standard deviation for the current $learner across all random seeds.
-            avg_score_cv_stddev = total_cv_std / total_random_seeds
-            # Display the average cross-validation score with standard deviation to stdout.
-            msg_info(f"AVERAGE CROSS-VALIDATION SCORE FOR {learner.upper()} ACROSS ALL RANDOM SEEDS: {avg_score_cv:.2%} ± {avg_score_cv_stddev:.2%}")     
+        #-------------#
+        #--- Score ---#
+        #-------------#
+        # Calculate and display the average scores for the current learner across all random seeds.
+        calculate_average_scores(
+            learner=learner,
+            total_score=total_score,
+            total_cv_score=total_cv_score,
+            total_cv_std=total_cv_std,
+            total_random_seeds=len(random_seeds)
+        )
 
 #############
 ### START ###
