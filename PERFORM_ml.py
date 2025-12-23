@@ -131,21 +131,42 @@ def main(filename):
     #------------------------#
     #--- Machine Learning ---#
     #------------------------#
+    # Define the machine learning algorithms to use.
+    use_learners = convert_to_list(string=configuration['ML']['use_learners'], delimiter=',')
     # Define the random seed(s).
     random_seeds = [int(item) for item in convert_to_list(string=configuration['GENERAL']['random_seed'], delimiter=',')]
+    # Total number of random seeds.
+    total_random_seeds = len(random_seeds)
     # Iterate through each random seed.
-    for seed in random_seeds:
-        msg_info(f'Using random seed: {seed}')
-        # Perform machine learning.
-        machine_learning(
-            X_train=X_train,
-            X_test=X_test,
-            y_train=y_train,
-            y_test=y_test,
-            symbols=symbols,
-            perform_hyperparameter_optimization=convert_to_bool(configuration['GENERAL']['perform_hyperparameter_optimization']),
-            perform_cross_validation=convert_to_bool(configuration['GENERAL']['perform_cross_validation'])
-        )
+    for learner in use_learners:
+        # Create a border to denote a process.
+        border(f"MACHINE LEARNING: {learner}", border_char='*')
+        for seed in random_seeds:
+            msg_info(f"Random Seed: {seed}")
+            # Perform machine learning.
+            score, score_cv, score_cv_stddev = machine_learning(
+                X_train=X_train,
+                X_test=X_test,
+                y_train=y_train,
+                y_test=y_test,
+                name=learner,
+                symbols=symbols,
+                perform_cross_validation=convert_to_bool(configuration['GENERAL']['perform_cross_validation']),
+                cross_validation_folds=int(configuration['ML']['cross_validation_folds']),
+                perform_hyperparameter_optimization=convert_to_bool(configuration['GENERAL']['perform_hyperparameter_optimization']),
+                random_state=seed,
+                save_threshold=float(configuration['ML']['save_threshold']),
+            )
+        # Average the scores for the current $learner across all random seeds.
+        avg_score = score / total_random_seeds
+        msg_info(f"AVERAGE SCORE FOR {learner.upper()} ACROSS ALL RANDOM SEEDS: {avg_score:.2%}")
+        try:
+            avg_score_cv = score_cv / total_random_seeds
+            msg_info(f"AVERAGE CROSS-VALIDATION F1 SCORE FOR {learner} ACROSS ALL RANDOM SEEDS: {avg_score_cv:.2%} ± {score_cv_stddev / total_random_seeds:.2%}")
+        except TypeError:
+            pass
+        
+        
 
 #############
 ### START ###
