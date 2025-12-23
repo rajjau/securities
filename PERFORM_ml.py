@@ -115,7 +115,7 @@ def main(filename):
         columns_y=columns_y,
         holdout_days=int(configuration['DATA']['holdout_days']),
         normalize_X=True,
-        normalize_method=configuration['SCALING']['scaling'],
+        normalize_method=configuration['NORMALIZATION']['normalize_method'],
     )
     #-------------------------#
     #--- Feature Selection ---#
