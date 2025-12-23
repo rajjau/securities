@@ -142,6 +142,7 @@ def main(filename):
         # Create a border to denote a process.
         border(f"MACHINE LEARNING: {learner}", border_char='*')
         for seed in random_seeds:
+            # Display the current random seed to stdout.
             msg_info(f"Random Seed: {seed}")
             # Perform machine learning.
             score, score_cv, score_cv_stddev = machine_learning(
@@ -159,11 +160,15 @@ def main(filename):
             )
         # Average the scores for the current $learner across all random seeds.
         avg_score = score / total_random_seeds
+        # Display the average score to stdout.
         msg_info(f"AVERAGE SCORE FOR {learner.upper()} ACROSS ALL RANDOM SEEDS: {avg_score:.2%}")
         try:
+            # Calculate the average cross-validation score for the current $learner across all random seeds.
             avg_score_cv = score_cv / total_random_seeds
+            # Display the average cross-validation score to stdout.
             msg_info(f"AVERAGE CROSS-VALIDATION F1 SCORE FOR {learner} ACROSS ALL RANDOM SEEDS: {avg_score_cv:.2%} ± {score_cv_stddev / total_random_seeds:.2%}")
         except TypeError:
+            # If cross-validation was not performed, skip the above step.
             pass
         
         
