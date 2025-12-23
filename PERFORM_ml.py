@@ -52,6 +52,25 @@ def calculate_baseline_accuracy(counts):
     # Display the baseline accuracy to stdout.
     msg_info(f"Num. of Class 0: {counts[0.0]} | Num. of Class 1: {counts[1.0]} | Baseline: {baseline_accuracy:.2%}")
 
+def data_feature_selection(columns_x, X_train, y_train, X_test, perform_feature_selection):
+    # Create a border to denote a process.
+    border('FEATURE SELECTION', border_char='><')
+    if perform_feature_selection:
+        # Perform feature selection.
+        X_train, X_test, selected_features = feature_selection(
+            X_train=X_train,
+            X_test=X_test,
+            y_train=y_train,
+            feature_names=columns_x
+        )
+        # Diplay message to stdout regarding selected features.
+        msg_info(f"Selected features: {selected_features.to_list()}")
+    else:
+        # Display message to stdout that feature selection will not be performed.
+        msg_info('Feature selection was set to False and will not be performed. Edit this script to change this.')
+    # Return the training and testing data after feature selection.
+    return X_train, X_test
+
 ############
 ### MAIN ###
 ############
@@ -88,9 +107,9 @@ def main(filename):
     # Calculate the baseline accuracy and display it to stdout.
     calculate_baseline_accuracy(data[columns_y].value_counts())
     #------------------------#
-    #--- Split Train/Test ---#
+    #--- Train/Test Split ---#
     #------------------------#
-    # Split the $data into training and testing sets, where the test set is the final X days from the $data. Additionally, the columns are normalized.
+    # Split the data into training and testing datasets.
     X_train, X_test, y_train, y_test = train_test_split(
         data=data,
         columns_x=columns_x,
@@ -98,62 +117,39 @@ def main(filename):
         holdout_days=int(configuration['DATA']['holdout_days']),
         normalize_X=True
     )
-    #---------------#
-    #--- Scaling ---#
-    #---------------#
-    # Create a border to denote a process.
-    border('SCALING', border_char='><')
-    # Determine if scaling will be performed.
-    perform_scaling = convert_to_bool(configuration['GENERAL']['perform_scaling'])
-    # Check if the user has set scaling to be performed.
-    if not perform_scaling:
-        msg_info('Scaling was set to False and will not be performed. Edit this script to change this.')
-    else:
-        # Obtain the scaling method from the configuration file.
-        scaling_method = configuration['SCALING']['scaling']
-        # Display a message to stdout regarding the scaling method.
-        msg_info(f"Scaling will be performed using '{scaling_method}' for all features.")
-        # Evaluate the scaling method string to obtain the actual scaling class.
-        scaling_method = eval(scaling_method)
-        # [All Features] Scale the training and testing data.
-        X_train = scaling_method(X=X_train)
-        X_test = scaling_method(X=X_test)
     #-------------------------#
     #--- Feature Selection ---#
     #-------------------------#
-    # Create a border to denote a process.
-    border('FEATURE SELECTION', border_char='><')
-    # Determine if feature selection will be performed.
-    perform_feature_selection = convert_to_bool(configuration['GENERAL']['perform_feature_selection'])
-    if perform_feature_selection:
-        # Perform feature selection.
-        X_train, X_test, selected_features = feature_selection(
+    # Perform feature selection.
+    X_train, X_test = data_feature_selection(
+        columns_x=columns_x,
+        X_train=X_train,
+        y_train=y_train,
+        X_test=X_test,
+        perform_feature_selection=convert_to_bool(configuration['GENERAL']['perform_feature_selection'])
+    )
+    #------------------------#
+    #--- Machine Learning ---#
+    #------------------------#
+    # Define the random seed(s).
+    random_seeds = [int(item) for item in convert_to_list(string=configuration['GENERAL']['random_seed'], delimiter=',')]
+    # Iterate through each random seed.
+    for seed in random_seeds:
+        msg_info(f'Using random seed: {seed}')
+        # Perform machine learning.
+        machine_learning(
             X_train=X_train,
             X_test=X_test,
             y_train=y_train,
-            feature_names=columns_x
+            y_test=y_test,
+            symbols=symbols,
+            perform_hyperparameter_optimization=convert_to_bool(configuration['GENERAL']['perform_hyperparameter_optimization']),
+            perform_cross_validation=convert_to_bool(configuration['GENERAL']['perform_cross_validation'])
         )
-        # Diplay message to stdout regarding selected features.
-        msg_info(f"Selected features: {selected_features.to_list()}")
-    else:
-        # Display message to stdout that feature selection will not be performed.
-        msg_info('Feature selection was set to False and will not be performed. Edit this script to change this.')
-    #--------------------------#
-    #--- Training & Testing ---#
-    #--------------------------#
-    machine_learning(
-        X_train=X_train,
-        X_test=X_test,
-        y_train=y_train,
-        y_test=y_test,
-        symbols=symbols,
-        perform_hyperparameter_optimization=convert_to_bool(configuration['GENERAL']['perform_hyperparameter_optimization']),
-        perform_cross_validation=convert_to_bool(configuration['GENERAL']['perform_cross_validation'])
-    )
 
-# #############
-# ### START ###
-# #############
+#############
+### START ###
+#############
 if __name__ == '__main__':
     # Obtain user-defined variables.
     filename = args()
