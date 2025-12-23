@@ -12,7 +12,6 @@ from modules.import_and_parse import main as import_and_parse
 from modules.is_file import main as is_file
 from modules.machine_learning import main as machine_learning
 from modules.messages import msg_info
-from modules.scaling import UseMinMaxScaler, UseRobustScaler, UseStandardScaler
 from modules.train_test_split import main as train_test_split
 
 ################
@@ -115,7 +114,8 @@ def main(filename):
         columns_x=columns_x,
         columns_y=columns_y,
         holdout_days=int(configuration['DATA']['holdout_days']),
-        normalize_X=True
+        normalize_X=True,
+        normalize_method=configuration['SCALING']['scaling'],
     )
     #-------------------------#
     #--- Feature Selection ---#
