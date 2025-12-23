@@ -12,9 +12,10 @@ from sklearn.tree import DecisionTreeClassifier
 ### FUNCTIONS ###
 #################
 def select_k_best(X, y, feature_names):
+    """Perform SelectKBest feature selection to select features based on mutual information."""
     # Initialize the function. See:
     # https://scikit-learn.org/stable/modules/generated/sklearn.feature_selection.SelectKBest.html
-    selector = SelectKBest(mutual_info_classif, k = 5)
+    selector = SelectKBest(mutual_info_classif, k = len(feature_names) // 2)
     # Fit and transform the training data.
     selector.fit_transform(X = X, y = ravel(y))
     # Define the selected features.
@@ -22,9 +23,10 @@ def select_k_best(X, y, feature_names):
     # Convert the ndarray to an Index. This keeps the output type consistent.
     selected_features = Index(selected_features)
     # Return the selected list of features.
-    return(selected_features)
+    return selected_features
 
 def recursive_feature_elimination(X, y, feature_names):
+    """Perform Recursive Feature Elimination with Cross-Validation (RFECV) to select features."""
     # Initialize the function. See:
     # https://scikit-learn.org/stable/modules/generated/sklearn.feature_selection.RFECV.html
     selector = RFECV(estimator = DecisionTreeClassifier(), cv = TimeSeriesSplit(n_splits = 5), n_jobs = -1, scoring = 'f1_macro')
@@ -34,7 +36,7 @@ def recursive_feature_elimination(X, y, feature_names):
     # Define the selected features.
     selected_features = feature_names[selector.support_]
     # Return the selected list of features.
-    return(selected_features)
+    return selected_features
 
 ############
 ### MAIN ###
@@ -44,9 +46,9 @@ def main(X_train, X_test, y_train, feature_names):
     feature_names = Index(feature_names)
     # Perform feature selection.
     # selected_features = recursive_feature_elimination(X = X_train, y = y_train, feature_names = feature_names)
-    selected_features = select_k_best(X = X_train, y = y_train, feature_names = feature_names)
+    selected_features = select_k_best(X=X_train, y=y_train, feature_names=feature_names)
     # Apply the selected features to the training and test sets.
     X_train = X_train[selected_features]
     X_test = X_test[selected_features]
     # Return the modified X training and X test sets along with the list of selected feature column names.
-    return(X_train, X_test, selected_features)
+    return X_train, X_test, selected_features
