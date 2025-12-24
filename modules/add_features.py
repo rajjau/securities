@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from pandas import Timedelta,to_datetime
+from pandas import concat, DataFrame, Timedelta, to_datetime
 
 ######################
 ### CUSTOM MODULES ###
@@ -9,7 +9,7 @@ from modules.messages import msg_info
 ################
 ### SETTINGS ###
 ################
-LAGGED_MAX_DAYS = 5
+LAGGED_MAX_DAYS = 30
 
 #################
 ### FUNCTIONS ###
@@ -17,100 +17,113 @@ LAGGED_MAX_DAYS = 5
 def open_to_close(data):
     # Display informational message to stdout.
     msg_info('Feature: Adding opening to close value descriptions.')
-    # All open values in $data.
-    data_open_values = data['o']
-    # All close values in $data.
-    data_close_values = data['c']
-    # Define the name of the new column that describes whether the opening value for the symbol is less than, equal to, or greater than the closing value.
-    column = 'close_greater_than_open'
-    # All instances where the closing value is less than or equal to the opening value.
-    data.loc[data_close_values <= data_open_values, column] = 0
     # All instances where the closing value is greater than the opening value.
-    data.loc[data_close_values > data_open_values, column] = 1
+    data['close_greater_than_open'] = (data['c'] > data['o']).astype(int)
     # Return the $data with the new column.
-    return(data)
+    return data
+
+def convert_to_float32(data, prefix):
+    """Convert all numeric columns starting with a given prefix to float32."""
+    # Define all columns that start with the specified $prefix and are numeric.
+    cols = [c for c in data.columns if c.startswith(prefix) and data[c].dtype in ['float64', 'int64']]
+    # Convert the defined columns to float32.
+    data[cols] = data[cols].astype('float32')
+    # Return the modified $data.
+    return data
 
 def time(data):
     # Display informational message to stdout.
     msg_info('Feature: Adding time descriptions.')
     # Convert the column containing Unix millisecond timestamps into Pandas datetime format.
-    timestamps = to_datetime(data['t'], unit = 'ms')
-    # Add the full date (YYYY-MM-DD).
-    data['t_d'] = timestamps.dt.date
-    # Add the day of week.
-    data['day_of_week'] = timestamps.dt.day_name()
-    # Add the previous day of the week name as well.
-    data['lagged_day_of_week'] = (timestamps - Timedelta(days = 1)).dt.day_name()
+    timestamps = to_datetime(data['t'], unit='ms')
+    # Create new columns:
+    # 't_d': Full date (YYYY-MM-DD).
+    # 'day_of_week': Day of the week name.
+    # 'lagged_day_of_week': Previous day of the week name.
+    new_cols = {
+        't_d': timestamps.dt.normalize(),  # faster than dt.date
+        'day_of_week': timestamps.dt.day_name(),
+        'lagged_day_of_week': (timestamps - Timedelta(days=1)).dt.day_name()
+    }
+    # Add the new columns to $data.
+    data = concat([data, DataFrame(new_cols)], axis=1)
+    # Create a copy of $data to avoid SettingWithCopyWarning.
+    data = data.copy()
     # Return the $data.
-    return(data)
+    return data
 
-class lagged:
-    def __init__(self, data):
-        # Display informational message to stdout.
-        msg_info('Feature: Adding features from previous days.')
-        # Sort the DataFrame by the symbol name and timestamp. This groups stocks and ensures the data for a given stock is in order from earliest to most recent.
-        data = data.sort_values(by = ['T', 't'])
-        # Add features from the previous days.
-        for previous_day in range(1, LAGGED_MAX_DAYS + 1):
-            # Add the previous day's closing value.
-            data = self.obtain_data_from_previous_day(data = data, column_name = 'c', new_column_name = f'lagged_close_{previous_day}', previous_day = previous_day)
-            # Add the previous day's highest price value.
-            data = self.obtain_data_from_previous_day(data = data, column_name = 'h', new_column_name = f'lagged_high_{previous_day}', previous_day = previous_day)
-            # Add the previous day's lowest price value.
-            data = self.obtain_data_from_previous_day(data = data, column_name = 'l', new_column_name = f'lagged_low_{previous_day}', previous_day = previous_day)
-            # Add the previous day's number of transactions.
-            data = self.obtain_data_from_previous_day(data = data, column_name = 'n', new_column_name = f'lagged_number_transactions_{previous_day}', previous_day = previous_day)
-            # Add the previous day's opening value.
-            data = self.obtain_data_from_previous_day(data = data, column_name = 'o', new_column_name = f'lagged_open_{previous_day}', previous_day = previous_day)
-            # Add the previous day's volume.
-            data = self.obtain_data_from_previous_day(data = data, column_name = 'v', new_column_name = f'lagged_volume_{previous_day}', previous_day = previous_day)
-            # Add the previous day's volume weighted averaged price.
-            data = self.obtain_data_from_previous_day(data = data, column_name = 'vw', new_column_name = f'lagged_volume_weighted_avg_{previous_day}', previous_day = previous_day) 
-        # Make $data an internal variable to the class.
-        self._data = data
+def lagged(data):
+    # Display informational message to stdout.
+    msg_info('Feature: Adding features from previous days.')
+    # Sort the DataFrame by the symbol name and timestamp. This groups stocks and ensures the data for a given stock is in order from earliest to most recent.
+    data = data.sort_values(by=['T', 't'])
+    # Convert relevant columns to float32 to save memory.
+    for col in ['c', 'h', 'l', 'n', 'o', 'v', 'vw']: data[col] = data[col].astype('float32')
+    # Define a dictionary to hold the new columns.
+    new_cols = {}
+    # Precompute groupby once for major speed improvement.
+    grouped = data.groupby('T')
+    # Iterate through each previous day.
+    for previous_day in range(1, LAGGED_MAX_DAYS + 1):
+        # Iterate through each column to create lagged features for.
+        for col in ['c', 'h', 'l', 'n', 'o', 'v', 'vw']:
+            # Define the new column name.
+            new_name = f"lagged_{col}_{previous_day}"
+            # Obtain data from the specified previous day, ensuring to group by the symbol name.
+            new_cols[new_name] = grouped[col].shift(previous_day)
+    # Add the new columns to $data.
+    data = concat([data, DataFrame(new_cols)], axis=1)
+    # Convert only numeric lagged columns to float32. This should be done after adding all lagged columns.
+    data = convert_to_float32(data=data, prefix='lagged_')
+    # Create a copy of $data to avoid SettingWithCopyWarning.
+    data = data.copy()
+    # Return the $data.
+    return data
 
-    @property
-    def data(self):
-        # Return the $data.
-        return(self._data)
-    
-    def obtain_data_from_previous_day(self, data, column_name, new_column_name, previous_day = 1):
-        # Obtain data from the specified previous day, ensuring to group by the symbol name. The previous day variable only pulls data from the day that occured X days ago, not everything up to it.
-        data[new_column_name] = data.groupby('T')[column_name].shift(previous_day)
-        # Return the $data.
-        return(data)
-
-class feature_engineering:
-    def __init__(self, data):
-        # Display informational message to stdout.
-        msg_info('Feature: Creating new features based off existing ones.')
-        # Sort the DataFrame by the symbol name and timestamp. This groups stocks and ensures the data for a given stock is in order from earliest to most recent.
-        data = data.sort_values(by = ['T', 't'])
-        # Add new features from the previous days.
-        for previous_day in range(1, LAGGED_MAX_DAYS + 1):
-            # Add the spread between the high and low prices.
-            data[f"lagged_high_low_spread_{previous_day}"] = data[f"lagged_high_{previous_day}"] - data[f"lagged_low_{previous_day}"]
-            # Add the return from the previous days.
-            data[f"lagged_daily_return_{previous_day}"] = (data[f"lagged_close_{previous_day}"] - data[f"lagged_open_{previous_day}"]) / data[f"lagged_open_{previous_day}"]
-        # Make $data an internal variable to the class.
-        self._data = data
-
-    @property
-    def data(self):
-        # Return the $data.
-        return(self._data)
+def feature_engineering(data):
+    # Display informational message to stdout.
+    msg_info('Feature: Creating new features based off existing ones.')
+    # Sort the DataFrame by the symbol name and timestamp. This groups stocks and ensures the data for a given stock is in order from earliest to most recent.
+    data = data.sort_values(by=['T', 't'])
+    # Define a dictionary to hold the new columns.
+    new_cols = {}
+    # Pre-fetch lagged columns for faster access.
+    lag_h = data.filter(like = 'lagged_h_')
+    lag_l = data.filter(like = 'lagged_l_')
+    lag_c = data.filter(like = 'lagged_c_')
+    lag_o = data.filter(like = 'lagged_o_')
+    # Iterate through each previous day.
+    for previous_day in range(1, LAGGED_MAX_DAYS + 1):
+        # Obtain the lagged high, low, close, and open values.
+        high_ = lag_h[f"lagged_h_{previous_day}"]
+        low_ = lag_l[f"lagged_l_{previous_day}"]
+        close_ = lag_c[f"lagged_c_{previous_day}"]
+        open_ = lag_o[f"lagged_o_{previous_day}"]
+        # Add the spread between the high and low prices.
+        new_cols[f"lagged_high_low_spread_{previous_day}"] = high_ - low_
+        # Add the return from the previous days.
+        new_cols[f"lagged_daily_return_{previous_day}"] = (close_ - open_) / open_
+    # Add the new columns to $data.
+    data = concat([data, DataFrame(new_cols)], axis=1)
+    # Convert engineered numeric columns to float32
+    data = convert_to_float32(data=data, prefix='lagged_high_low_spread_')
+    data = convert_to_float32(data=data, prefix='lagged_daily_return_')
+    # Create a copy of $data to avoid SettingWithCopyWarning.
+    data = data.copy()
+    # Return the $data.
+    return data
 
 ############
 ### MAIN ###
 ############
 def main(data):
     # Add string labels that describe when the opening value is less, equal, or greater than the closing value. These will be converted to int using one-hot-encoding before machine learning.
-    data = open_to_close(data = data)
+    data = open_to_close(data=data)
     # Calculate the different aspects of time for each row based on the timestamp ('t') value.
-    data = time(data = data)
+    data = time(data=data)
     # Add features from previous days.
-    data = lagged(data = data).data
+    data = lagged(data=data)
     # Create new features from the existing data.
-    data = feature_engineering(data = data).data
+    data = feature_engineering(data=data)
     # Return the modified $data.
-    return(data)
+    return data
