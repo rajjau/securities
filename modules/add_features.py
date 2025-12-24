@@ -9,7 +9,7 @@ from modules.messages import msg_info
 ################
 ### SETTINGS ###
 ################
-LAGGED_MAX_DAYS = 30
+LAGGED_MAX_DAYS = 15
 
 #################
 ### FUNCTIONS ###
