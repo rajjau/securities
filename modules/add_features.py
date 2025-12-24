@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from math import sin, cos, pi
 from pandas import concat, DataFrame, Timedelta, to_datetime
 
 ######################
@@ -10,6 +11,7 @@ from modules.messages import msg_info
 ### SETTINGS ###
 ################
 LAGGED_MAX_DAYS = 15
+MOVING_AVERAGE_WINDOWS = [5, 10, 15, 20, 50, 100, 200]
 
 #################
 ### FUNCTIONS ###
@@ -22,12 +24,18 @@ def open_to_close(data):
     # Return the $data with the new column.
     return data
 
-def convert_to_float32(data, prefix):
-    """Convert all numeric columns starting with a given prefix to float32."""
-    # Define all columns that start with the specified $prefix and are numeric.
-    cols = [c for c in data.columns if c.startswith(prefix) and data[c].dtype in ['float64', 'int64']]
-    # Convert the defined columns to float32.
-    data[cols] = data[cols].astype('float32')
+def convert_to_float32(data, prefix = None, columns = None):
+    """Convert 64bit columns to 32bit to save memory."""
+    # If the user provided a $prefix but not a column list, then filter columns from $data that start with that prefix.
+    if prefix and not columns:
+        columns = [c for c in data.columns if c.startswith(prefix)]
+    # If both $prefix and $columns are provided, filter $columns to only those that start with $prefix.
+    elif prefix and columns:
+        columns = [c for c in columns if c.startswith(prefix)]
+    # Iterate through each specified column.
+    for col in columns:
+        # Convert only if the column exists in $data and is numeric.
+        if col in data.columns and data[col].dtype in ['float64', 'int64']: data[col] = data[col].astype('float32')
     # Return the modified $data.
     return data
 
@@ -52,65 +60,147 @@ def time(data):
     # Return the $data.
     return data
 
-def lagged(data):
+def add_lagged_features(data):
     # Display informational message to stdout.
-    msg_info('Feature: Adding features from previous days.')
-    # Sort the DataFrame by the symbol name and timestamp. This groups stocks and ensures the data for a given stock is in order from earliest to most recent.
-    data = data.sort_values(by=['T', 't'])
-    # Convert relevant columns to float32 to save memory.
-    for col in ['c', 'h', 'l', 'n', 'o', 'v', 'vw']: data[col] = data[col].astype('float32')
-    # Define a dictionary to hold the new columns.
-    new_cols = {}
+    msg_info("Feature: Adding lagged columns and derived lagged features.")
+    # Track existing columns before adding new ones.
+    original_columns = set(data.columns)
+    # Sort the DataFrame by symbol and timestamp to ensure correct rolling behavior.
+    data = data.sort_values(by=["T", "t"])
+    # Convert core OHLCV columns to float32 for memory efficiency.
+    for col in ['c', 'h', 'l', 'n', 'o', 'v', 'vw']: data[col] = data[col].astype("float32")
     # Precompute groupby once for major speed improvement.
-    grouped = data.groupby('T')
-    # Iterate through each previous day.
+    grouped = data.groupby("T")
+    # Define a dictionary to hold all new lagged and derived columns.
+    new_cols = {}
+    # Generate lagged OHLCV columns and derived features in a single pass.
     for previous_day in range(1, LAGGED_MAX_DAYS + 1):
-        # Iterate through each column to create lagged features for.
+        # Create lagged OHLCV columns.
         for col in ['c', 'h', 'l', 'n', 'o', 'v', 'vw']:
-            # Define the new column name.
-            new_name = f"lagged_{col}_{previous_day}"
-            # Obtain data from the specified previous day, ensuring to group by the symbol name.
-            new_cols[new_name] = grouped[col].shift(previous_day)
-    # Add the new columns to $data.
+            new_cols[f"lagged_{col}_{previous_day}"] = grouped[col].shift(previous_day)
+        # Compute derived lagged features using the newly created lagged columns.
+        lagged_high = grouped['h'].shift(previous_day)
+        lagged_low = grouped['l'].shift(previous_day)
+        lagged_close = grouped['c'].shift(previous_day)
+        lagged_open = grouped['o'].shift(previous_day)
+        new_cols[f"lagged_high_low_spread_{previous_day}"] = lagged_high - lagged_low
+        new_cols[f"lagged_daily_return_{previous_day}"] = (lagged_close - lagged_open) / lagged_open
+    # Add all new columns to the DataFrame.
     data = concat([data, DataFrame(new_cols)], axis=1)
-    # Convert only numeric lagged columns to float32. This should be done after adding all lagged columns.
-    data = convert_to_float32(data=data, prefix='lagged_')
+    # Identify new columns created in this function.
+    new_columns = set(data.columns) - original_columns
+    # Convert only new numeric columns to float32.
+    convert_to_float32(data=data, prefix=None, columns=new_columns)
     # Create a copy of $data to avoid SettingWithCopyWarning.
     data = data.copy()
-    # Return the $data.
+    # Return the modified DataFrame.
     return data
 
-def feature_engineering(data):
+def add_technical_indicators(data):
     # Display informational message to stdout.
-    msg_info('Feature: Creating new features based off existing ones.')
+    msg_info("Feature: Adding technical indicators (SMA, EMA, momentum, ROC, volatility, rolling stats, z-scores).")
+    # Track existing columns before adding new ones.
+    original_columns = set(data.columns)
     # Sort the DataFrame by the symbol name and timestamp. This groups stocks and ensures the data for a given stock is in order from earliest to most recent.
-    data = data.sort_values(by=['T', 't'])
-    # Define a dictionary to hold the new columns.
-    new_cols = {}
-    # Pre-fetch lagged columns for faster access.
-    lag_h = data.filter(like = 'lagged_h_')
-    lag_l = data.filter(like = 'lagged_l_')
-    lag_c = data.filter(like = 'lagged_c_')
-    lag_o = data.filter(like = 'lagged_o_')
-    # Iterate through each previous day.
-    for previous_day in range(1, LAGGED_MAX_DAYS + 1):
-        # Obtain the lagged high, low, close, and open values.
-        high_ = lag_h[f"lagged_h_{previous_day}"]
-        low_ = lag_l[f"lagged_l_{previous_day}"]
-        close_ = lag_c[f"lagged_c_{previous_day}"]
-        open_ = lag_o[f"lagged_o_{previous_day}"]
-        # Add the spread between the high and low prices.
-        new_cols[f"lagged_high_low_spread_{previous_day}"] = high_ - low_
-        # Add the return from the previous days.
-        new_cols[f"lagged_daily_return_{previous_day}"] = (close_ - open_) / open_
-    # Add the new columns to $data.
-    data = concat([data, DataFrame(new_cols)], axis=1)
-    # Convert engineered numeric columns to float32
-    data = convert_to_float32(data=data, prefix='lagged_high_low_spread_')
-    data = convert_to_float32(data=data, prefix='lagged_daily_return_')
-    # Create a copy of $data to avoid SettingWithCopyWarning.
-    data = data.copy()
-    # Return the $data.
+    data = data.sort_values(by=['T','t'])
+    # Precompute groupby once for major speed improvement.
+    grouped = data.groupby('T')
+    # Precompute daily returns.
+    returns = grouped['c'].transform(lambda entry: entry.pct_change())
+    # Compute all window-based indicators.
+    for window in MOVING_AVERAGE_WINDOWS:
+        # Simple Moving Average (SMA).
+        data[f"sma_{window}"] = grouped['c'].transform(lambda entry: entry.rolling(window).mean())
+        # Exponential Moving Average (EMA).
+        data[f"ema_{window}"] = grouped['c'].transform(lambda entry: entry.ewm(span=window,adjust=False).mean())
+        # Momentum.
+        data[f"momentum_{window}"] = grouped['c'].transform(lambda entry: entry - entry.shift(window))
+        # Rate of Change (ROC).
+        data[f"roc_{window}"] = grouped['c'].transform(lambda entry: (entry - entry.shift(window)) / entry.shift(window))
+        # Volatility (Standard Deviation of Returns).
+        data[f"volatility_{window}"] = returns.rolling(window).std()
+        # Rolling Maximum, Minimum, Range.
+        data[f"rolling_max_close_{window}"] = grouped['c'].transform(lambda entry: entry.rolling(window).max())
+        data[f"rolling_min_close_{window}"] = grouped['c'].transform(lambda entry: entry.rolling(window).min())
+        data[f"rolling_range_{window}"] = data[f"rolling_max_close_{window}"] - data[f"rolling_min_close_{window}"]
+        rolling_mean = returns.rolling(window).mean()
+        rolling_std = returns.rolling(window).std()
+        # Z-Score of Returns.
+        data[f"zscore_return_{window}"] = (returns - rolling_mean) / rolling_std
+    # Identify new columns created in this function.
+    new_columns = set(data.columns) - original_columns
+    # Convert only new numeric columns to float32.
+    convert_to_float32(data=data, prefix=None, columns=new_columns)
+    # Return modified DataFrame
+    return data
+
+def add_candlestick_features(data):
+    # Display informational message to stdout.
+    msg_info("Feature: Adding candlestick features (body, shadows, relative body).")
+    # Track existing columns before adding new ones.
+    original_columns = set(data.columns)
+    # Compute candle body size.
+    data["candle_body"] = (data["c"] - data["o"]).abs()
+    # Compute upper shadow.
+    data["upper_shadow"] = data["h"] - data[["c","o"]].max(axis=1)
+    # Compute lower shadow.
+    data["lower_shadow"] = data[["c","o"]].min(axis=1) - data["l"]
+    # Compute relative body size.
+    data["relative_body"] = data["candle_body"] / (data["h"] - data["l"])
+    # Identify new columns created in this function.
+    new_columns = set(data.columns) - original_columns
+    # Convert only new numeric columns to float32.
+    convert_to_float32(data=data, prefix=None, columns=new_columns)
+    # Return modified DataFrame.
+    return data
+
+def add_interaction_features(data):
+    # Display informational message to stdout.
+    msg_info("Feature: Adding interaction features (price-volume, return-volume, spread-volume).")
+    # Track existing columns before adding new ones.
+    original_columns = set(data.columns)
+    # Compute price × volume interaction.
+    data["close_volume"] = data["c"] * data["v"]
+    # Compute return × volume interaction.
+    data["return_volume"] = ((data["c"] - data["o"]) / data["o"]) * data["v"]
+    # Compute spread × volume interaction.
+    data["spread_volume"] = (data["h"] - data["l"]) * data["v"]
+    # Identify new columns created in this function.
+    new_columns = set(data.columns) - original_columns
+    # Convert only new numeric columns to float32.
+    convert_to_float32(data=data, prefix=None, columns=new_columns)
+    # Return modified DataFrame.
+    return data
+
+def add_calendar_features(data):
+    # Display informational message to stdout.
+    msg_info("Feature: Adding calendar and cyclical time features.")
+    # Track existing columns before adding new ones.
+    original_columns = set(data.columns)
+    # Convert timestamps to datetime.
+    timestamps = to_datetime(data['t'], unit='ms')
+    # Extract day of month.
+    data['day_of_month'] = timestamps.dt.day
+    # Extract month.
+    data['month'] = timestamps.dt.month
+    # Extract quarter.
+    data['quarter'] = timestamps.dt.quarter
+    # Month-end flag.
+    data['is_month_end'] = timestamps.dt.is_month_end.astype(int)
+    # Cyclical encoding for day of week (7-day cycle).
+    day_of_week = timestamps.dt.dayofweek
+    data['dow_sin'] = (2 * pi * day_of_week / 7).map(sin)
+    data['dow_cos'] = (2 * pi * day_of_week / 7).map(cos)
+    # Cyclical encoding for day of month (variable-length cycle).
+    day_of_month = timestamps.dt.day
+    days_in_month = timestamps.dt.days_in_month
+    data['dom_sin'] = (2 * pi * day_of_month / days_in_month).map(sin)
+    data['dom_cos'] = (2 * pi * day_of_month / days_in_month).map(cos)
+    # Identify new columns created in this function.
+    new_columns = set(data.columns) - original_columns
+    # Convert only new numeric columns to float32.
+    convert_to_float32(data=data, prefix=None, columns=new_columns)
+    # Return modified DataFrame.
     return data
 
 ############
@@ -122,8 +212,14 @@ def main(data):
     # Calculate the different aspects of time for each row based on the timestamp ('t') value.
     data = time(data=data)
     # Add features from previous days.
-    data = lagged(data=data)
-    # Create new features from the existing data.
-    data = feature_engineering(data=data)
+    data = add_lagged_features(data=data)
+    # Add various technical indicators.
+    data = add_technical_indicators(data=data)
+    # Add candlestick features.
+    data = add_candlestick_features(data=data)
+    # Add interaction features.
+    data = add_interaction_features(data=data)
+    # Add calendar features.
+    data = add_calendar_features(data=data)
     # Return the modified $data.
     return data
