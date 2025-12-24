@@ -1,9 +1,7 @@
 #!/usr/bin/env python
-from multiprocessing import Pool
-from os import cpu_count
+from argparse import ArgumentParser
 from pandas import read_csv
 from pathlib import Path
-from sys import argv
 
 ######################
 ### CUSTOM MODULES ###
@@ -16,26 +14,25 @@ from modules.messages import msg_info
 ### FUNCTIONS ###
 #################
 def args():
-    try:
-        filename = Path(argv[1]).absolute()
-    except IndexError:
-        raise IndexError('Argument 1: CSV containing the combined stock data to add features to.')
-    try:
-        # Argument 2: Output filename.
-        filename_output = Path(argv[2]).absolute()
-    except IndexError:
-        raise IndexError('Argument 2 : CSV output filename for data with features.')
-    # Return the user-defined variable(s).
-    return(filename, filename_output)
+    """Parse and return command-line arguments."""
+    # Create an ArgumentParser object.
+    parser = ArgumentParser(description='Add features to financial data.')
+    # Add arguments.
+    parser.add_argument('filename', type=Path, help='CSV containing the combined stock data to add features to.')
+    parser.add_argument('filename_output', type=Path, help='CSV output filename.')
+    # Parse the arguments.
+    args = parser.parse_args()
+    # Return the filename and symbols.
+    return args.filename.absolute(), args.filename_output.absolute()
 
 ############
 ### MAIN ###
 ############
 def main(filename, filename_output):
     # Ensure the specified file exists.
-    is_file(filename = filename, exit_on_error = True)
+    is_file(filename=filename, exit_on_error=True)
     # Read the data.
-    data = read_csv(filepath_or_buffer = filename)
+    data = read_csv(filepath_or_buffer=filename)
     # Remove all duplicate rows.
     data = data.drop_duplicates(keep = 'first')
     # Remove all rows that contain any NaNs.
@@ -62,6 +59,6 @@ def main(filename, filename_output):
 #############
 if __name__ == '__main__':
     # Obtain user-defined variables.
-    [filename, filename_output] = args()
+    filename, filename_output = args()
     # Start the script.
-    Pool(processes = cpu_count() - 1).apply(main, args = (filename, filename_output))
+    main(filename=filename, filename_output=filename_output)
