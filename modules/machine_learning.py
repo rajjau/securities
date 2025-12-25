@@ -33,7 +33,7 @@ MAX_ITER = 99999999
 ################
 ### WARNINGS ###
 ################
-# Filter warnings that occurs when using GridSearchCV.
+# Filter warnings that occurs when using hyperparameter optimization.
 filterwarnings('ignore', category = FitFailedWarning)
 filterwarnings('ignore', category = LinAlgWarning)
 filterwarnings('ignore', category = UserWarning)
@@ -43,18 +43,18 @@ filterwarnings('ignore', category = UserWarning)
 ###################
 # Define a dictionary that contains all learners and their hyperparameters to use.
 learners = {}
-learners['Bagging'] = BaggingClassifier()
+learners['Bagging'] = BaggingClassifier(n_jobs = -1)
 learners['Decision Tree'] = DecisionTreeClassifier()
-learners['K Nearest Neighbor'] = KNeighborsClassifier()
-learners['Logistic Regression'] = LogisticRegression(max_iter = MAX_ITER)
-learners['Random Forest'] = RandomForestClassifier()
+learners['K Nearest Neighbor'] = KNeighborsClassifier(n_jobs = -1)
+learners['Logistic Regression'] = LogisticRegression(max_iter = MAX_ITER, n_jobs = None)
+learners['Random Forest'] = RandomForestClassifier(n_jobs = -1)
 learners['Ridge CV'] = RidgeClassifierCV()
 learners['SVC'] = SVC()
 
-####################
-### GRIDSEARCHCV ###
-####################
-# Define a dictionary that contains all learners to perform GridSearchCV with.
+###################################
+### HYPERPARAMETER OPTIMIZATION ###
+###################################
+# Define a dictionary that contains all learners to perform hyperparameter optimization with.
 learners_hyperparameters = {}
 
 learners_hyperparameters['Bagging'] = {
@@ -63,8 +63,7 @@ learners_hyperparameters['Bagging'] = {
     'estimator': {'Decision Tree': learners['Decision Tree'],
                   'Logistic Regression': learners['Logistic Regression']
                   },
-    'n_estimators': [10],
-    'n_jobs': [-1]
+    'n_estimators': [10]
 }
 
 learners_hyperparameters['Decision Tree'] = {
@@ -80,7 +79,6 @@ learners_hyperparameters['Decision Tree'] = {
 
 learners_hyperparameters['K Nearest Neighbor'] = {
     'algorithm': ['ball_tree', 'brute', 'kd_tree'],
-    'n_jobs': [-1],
     'n_neighbors': range(1, 25),
     'weights': ['distance', 'uniform', None]
 }
@@ -89,7 +87,6 @@ learners_hyperparameters['Logistic Regression'] = {
     'C': [arange(0.01, 1.01, 0.01), inf],
     'class_weight': ['balanced', None],
     'l1_ratio': arange(0, 1.05, 0.05),
-    'n_jobs': [None],
     'solver': ['lbfgs', 'liblinear', 'newton-cg', 'newton-cholesky', 'sag', 'saga'],
     'tol': [0.1, 0.01, 0.001, 0.0001, 0.00001]
 }
@@ -101,8 +98,7 @@ learners_hyperparameters['Random Forest'] = {
     'max_depth': [10, 50, 100, None],
     'max_features': ['log2', 'sqrt', None],
     'max_leaf_nodes': [10, 100, None],
-    'n_estimators': [100, 200, 250],
-    'n_jobs': [-1]
+    'n_estimators': [100, 200, 250]
 }
 
 learners_hyperparameters['Ridge CV'] = {
@@ -127,15 +123,21 @@ learners_hyperparameters['SVC'] = {
 #################
 ### FUNCTIONS ###
 #################
+def set_universal_params(model, random_state):
+    try:
+        # Use the current seed (if applicable).
+        model.set_params(random_state = random_state)
+    except ValueError:
+        pass
+    return model
+
 def hyperparameter_optimization(X_train, y_train, name, cross_validation_folds, random_state):
-    # Display message to stdout.
-    msg_info('Hyperparameter optimization is enabled.')
     try:
         # Obtain the parameters from the dictionary defined above.
         params = learners_hyperparameters[name]
     except KeyError:
         # If no hyperparameters were defined for $name, then raise an error.
-        msg_warn(f"The following learner name has not entries within the GridSearchCV dictionary defined in this script: '{name}'")
+        msg_warn(f"The following learner name has not entries within the hyperparameter dictionary defined in this script: '{name}'")
         # Return the defult learner instead.
         return learners[name]
     # Check if the current model is the Bagging, which is a meta-estimator.
@@ -158,11 +160,8 @@ def hyperparameter_optimization(X_train, y_train, name, cross_validation_folds, 
     timeseries_k_fold = TimeSeriesSplit(n_splits = cross_validation_folds)
     # Define the learner.
     model = learners[name]
-    try:
-        # Use the current seed (if applicable)
-        model.set_params(random_state = random_state)
-    except ValueError:
-        pass
+    # Set universal parameters.
+    model = set_universal_params(model=model, random_state=random_state)
     # Define the GridSearchCV object.
     # search = GridSearchCV(cv=timeseries_k_fold, estimator=model, param_grid=params, scoring='f1_macro')
     search = RandomizedSearchCV(cv=timeseries_k_fold, estimator=model, n_jobs=-1, param_distributions=params, random_state=random_state, scoring='f1_macro')
@@ -232,11 +231,8 @@ def main(X_train, X_test, y_train, y_test, name, symbols, perform_cross_validati
     else:
         # Otherwise, define the current model using the $name.
         model = learners[name]
-    try:
-        # Use the current seed (if applicable).
-        model.set_params(random_state = random_state)
-    except ValueError:
-        pass
+    # Set universal parameters.
+    model = set_universal_params(model=model, random_state=random_state)
     # Set the cross-validated score and corresponding standard deviation to None by default. These variables are only useful if the variable to perform cross-validation is set to bool True.
     score_cv = None
     score_cv_stddev = None
@@ -250,6 +246,6 @@ def main(X_train, X_test, y_train, y_test, name, symbols, perform_cross_validati
     saved_model = saved_model_filename(name=name, symbols=symbols, random_state=random_state)
     # If the $score is greater than or equal to the set threshold, save the model to an output file in the current working directory.
     save(saved_model=saved_model, model=model, score=score, save_threshold=save_threshold)
-    # Return the scores for the current seed.
+    # Return the model and its scores for the current seed.
     return score, score_cv, score_cv_stddev
 
