@@ -7,6 +7,7 @@ from sklearn.exceptions import FitFailedWarning
 from sklearn.metrics import f1_score
 from sklearn.model_selection import cross_val_score, GridSearchCV, RandomizedSearchCV, TimeSeriesSplit
 from warnings import filterwarnings
+
 #-------------------#
 #--- CLASSIFIERS ---#
 #-------------------#
@@ -23,9 +24,15 @@ from sklearn.svm import SVC
 from modules.date_and_time import main as date_and_time
 from modules.messages import msg_info,msg_warn
 
-#--------------#
-#-- WARNINGS --#
-#--------------#
+################
+### SETTINGS ###
+################
+# Maximum number of iterations.
+MAX_ITER = 99999999
+
+################
+### WARNINGS ###
+################
 # Filter warnings that occurs when using GridSearchCV.
 filterwarnings('ignore', category = FitFailedWarning)
 filterwarnings('ignore', category = LinAlgWarning)
@@ -39,7 +46,7 @@ learners = {}
 learners['Bagging'] = BaggingClassifier()
 learners['Decision Tree'] = DecisionTreeClassifier()
 learners['K Nearest Neighbor'] = KNeighborsClassifier()
-learners['Logistic Regression'] = LogisticRegression()
+learners['Logistic Regression'] = LogisticRegression(max_iter = MAX_ITER)
 learners['Random Forest'] = RandomForestClassifier()
 learners['Ridge CV'] = RidgeClassifierCV()
 learners['SVC'] = SVC()
@@ -53,8 +60,8 @@ learners_hyperparameters = {}
 learners_hyperparameters['Bagging'] = {
     'bootstrap': [True, False],
     'bootstrap_features': [True, False],
-    'estimator': {'Decision Tree': DecisionTreeClassifier(),
-                  'Logistic Regression': LogisticRegression()
+    'estimator': {'Decision Tree': learners['Decision Tree'],
+                  'Logistic Regression': learners['Logistic Regression']
                   },
     'n_estimators': [10],
     'n_jobs': [-1]
@@ -82,7 +89,6 @@ learners_hyperparameters['Logistic Regression'] = {
     'C': [arange(0.01, 1.01, 0.01), inf],
     'class_weight': ['balanced', None],
     'l1_ratio': arange(0, 1.05, 0.05),
-    'max_iter': [10000],
     'n_jobs': [None],
     'solver': ['lbfgs', 'liblinear', 'newton-cg', 'newton-cholesky', 'sag', 'saga'],
     'tol': [0.1, 0.01, 0.001, 0.0001, 0.00001]
@@ -158,7 +164,7 @@ def hyperparameter_optimization(X_train, y_train, name, cross_validation_folds, 
     except ValueError:
         pass
     # Define the GridSearchCV object.
-    # search = GridSearchCV(cv=timeseries_k_fold, estimator=model, param_grid=params, random_state=random_state, scoring='f1_macro')
+    # search = GridSearchCV(cv=timeseries_k_fold, estimator=model, param_grid=params, scoring='f1_macro')
     search = RandomizedSearchCV(cv=timeseries_k_fold, estimator=model, n_jobs=-1, param_distributions=params, random_state=random_state, scoring='f1_macro')
     # Fit the model with all combinations of hyperparameters to the training data.
     search.fit(X_train, y_train)
@@ -194,7 +200,7 @@ def saved_model_filename(name, symbols, random_state):
         # Otherwise, if there are a list if symbols the learner is specific to, then join the symbols via underscores.
         symbols = '_'.join(symbols)
         # Add the symbols as part of the filename.
-        filename = f"{name}_{symbols}_{timestamp}_seed{random_state}.pkl"
+        filename = f"{name}_{symbols}_{timestamp}_seed{random_state}.joblib"
     # Use `pathlib` to determine the absolute path.
     saved_model = Path(filename).absolute()
     # Return the filename.
@@ -227,7 +233,7 @@ def main(X_train, X_test, y_train, y_test, name, symbols, perform_cross_validati
         # Otherwise, define the current model using the $name.
         model = learners[name]
     try:
-        # Use the current seed (if applicable)
+        # Use the current seed (if applicable).
         model.set_params(random_state = random_state)
     except ValueError:
         pass
@@ -235,21 +241,15 @@ def main(X_train, X_test, y_train, y_test, name, symbols, perform_cross_validati
     score_cv = None
     score_cv_stddev = None
     # If the parameter to perform cross-validaton is set to bool True, then do so.
-    if perform_cross_validation is True:
-        # Perform cross-validation and obtain the average score along with the standard deviation.
-        [score_cv, score_cv_stddev] = cross_validation(model=model, X=X_train, y=y_train, cross_validation_folds=cross_validation_folds)
-        # Display the average score and standard deviation to stdout.
-        msg_info(f"The cross-validation score is {score_cv} with a standard deviation of {score_cv_stddev}.")
+    if perform_cross_validation is True: score_cv, score_cv_stddev = cross_validation(model=model, X=X_train, y=y_train, cross_validation_folds=cross_validation_folds)
     # Fit the $model to the training data.
     model.fit(X_train, y_train)
     # Calculate the accuracy of the trained $model on the test dataset.
     score = predict(model=model, X_test=X_test, y_test=y_test)
-    # Display the score to stdout.
-    msg_info(f"Score: {score}")
     # Define the name of the file to save the model to, if applicable.
     saved_model = saved_model_filename(name=name, symbols=symbols, random_state=random_state)
     # If the $score is greater than or equal to the set threshold, save the model to an output file in the current working directory.
     save(saved_model=saved_model, model=model, score=score, save_threshold=save_threshold)
-    # Return the scores
+    # Return the scores for the current seed.
     return score, score_cv, score_cv_stddev
 
