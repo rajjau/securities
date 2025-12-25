@@ -8,6 +8,7 @@ from pathlib import Path
 ######################
 from modules.border import main as border
 from modules.feature_selection import main as feature_selection
+from modules.calculate_results import main as calculate_results
 from modules.import_and_parse import main as import_and_parse
 from modules.is_file import main as is_file
 from modules.machine_learning import main as machine_learning
@@ -64,25 +65,12 @@ def data_feature_selection(columns_x, X_train, y_train, X_test, perform_feature_
         )
         # Diplay message to stdout regarding selected features.
         msg_info(f"Selected features: {selected_features.to_list()}")
+        msg_info(f"Kept {len(selected_features)} out of {len(columns_x)} total features.")
     else:
         # Display message to stdout that feature selection will not be performed.
         msg_info('Feature selection was set to False and will not be performed. Edit this script to change this.')
     # Return the training and testing data after feature selection.
     return X_train, X_test
-
-def calculate_average_scores(learner, total_random_seeds, total_score, total_cv_score, total_cv_std):
-    # If cross-validation was performed, calculate and display the average cross-validation score.
-    if total_cv_score > 0:
-        # Calculate the average cross-validation score for the current $learner across all random seeds.
-        avg_score_cv = total_cv_score / total_random_seeds
-        # Calculate the average cross-validation standard deviation for the current $learner across all random seeds.
-        avg_score_cv_stddev = total_cv_std / total_random_seeds
-        # Display the average cross-validation score with standard deviation to stdout.
-        msg_info(f"AVERAGE CROSS-VALIDATION SCORE FOR {learner.upper()} ACROSS ALL RANDOM SEEDS: {avg_score_cv:.2%} ± {avg_score_cv_stddev:.2%}")
-    # Calculate the average score for the current $learner across all random seeds.
-    avg_score = total_score / total_random_seeds
-    # Display the average score to stdout.
-    msg_info(f"AVERAGE SCORE FOR {learner.upper()} ACROSS ALL RANDOM SEEDS: {avg_score:.2%}")
 
 ############
 ### MAIN ###
@@ -119,6 +107,7 @@ def main(filename):
     columns_y = convert_to_list(string=configuration['DATA']['columns_y'], delimiter=',')
     # Calculate the baseline accuracy and display it to stdout.
     calculate_baseline_accuracy(data[columns_y].value_counts())
+    # Everything below this point assumes that the data has been successfully imported and preprocessed. The cache is now available for future runs.
     #------------------------#
     #--- Train/Test Split ---#
     #------------------------#
@@ -154,13 +143,11 @@ def main(filename):
         # Create a border to denote a process.
         border(f"MACHINE LEARNING: {learner}", border_char='*')
         # Initialize accumulators to zero at the start of each learner's seed loop
-        total_score = 0.0
-        total_cv_score = 0.0
-        total_cv_std = 0.0
+        total_score = []
+        total_cv_score = []
+        total_cv_std = []
         # Iterate through each random seed.
         for seed in random_seeds:
-            # Display the current random seed to stdout.
-            msg_info(f"Random Seed: {seed}")
             # Perform machine learning.
             score_seed, score_cv_seed, score_cv_stddev_seed = machine_learning(
                 X_train=X_train,
@@ -175,25 +162,25 @@ def main(filename):
                 random_state=seed,
                 save_threshold=float(configuration['ML']['save_threshold']),
             )
-            # Average the scores for the current $learner across all random seeds.
-            total_score += score_seed
-            try:
-                # Try to accumulate cross-validation scores if they were performed.
-                total_cv_score += score_cv_seed
-                total_cv_std += score_cv_stddev_seed
-            except TypeError:
-                # If cross-validation was not performed, skip the above step.
-                pass
+            # Add the score for the current $learner for the current $seed.
+            total_score.append(score_seed)
+            # Add the cross-validation score and standard deviation for the current $learner for the current $seed.
+            total_cv_score.append(score_cv_seed)
+            total_cv_std.append(score_cv_stddev_seed)
         #-------------#
         #--- Score ---#
         #-------------#
+        # Define the output filename.
+        output_filename = Path(ROOT, f'RESULTS_{learner.replace(" ", "_")}.csv').absolute()
         # Calculate and display the average scores for the current learner across all random seeds.
-        calculate_average_scores(
+        calculate_results(
             learner=learner,
+            random_seeds=random_seeds,
             total_score=total_score,
             total_cv_score=total_cv_score,
             total_cv_std=total_cv_std,
-            total_random_seeds=len(random_seeds)
+            save_results_to_file=convert_to_bool(configuration['GENERAL']['save_results_to_file']),
+            output_filename=output_filename
         )
 
 #############
