@@ -1,5 +1,6 @@
 #!/usr/bin/env python
-from pandas import read_csv, read_pickle
+from joblib import dump, load
+from pandas import read_csv
 from pathlib import Path
 
 ######################
@@ -13,7 +14,7 @@ from modules.one_hot_encoding import main as one_hot_encoding
 #################
 ### FUNCTIONS ###
 #################
-def process_data(filename, symbols, filename_pickle):
+def process_data(filename, symbols, filename_joblib):
     # Read the data from $filename and import it as a DataFrame.
     data = read_csv(filename)
     # Check if the user has defined certain symbols to train and test on.
@@ -28,8 +29,8 @@ def process_data(filename, symbols, filename_pickle):
     nans = data.isna().any(axis = 1)
     # Keep only entries that do not contain NaNs.
     data = data.loc[~nans, :].reset_index(drop = True)
-    # Save the imported and modified data to a pickle file for faster loading in the future.
-    data.to_pickle(filename_pickle)
+    # Save the imported and modified data to a joblib file for faster loading in the future.
+    dump(value = data, filename = filename_joblib)
     # Return the $data variable.
     return data
     
@@ -58,16 +59,16 @@ def main(filename, symbols, cache_directory, columns_one_hot_encoding, columns_x
     # Create the cache directory (if needed).
     cache_directory.mkdir(parents=True, exist_ok=True)
     # Define a pickle filename based on the provided $filename.
-    filename_pickle = Path(cache_directory, f"{filename.stem}_{'_'.join(symbols) if symbols else 'all'}.pkl")
+    filename_joblib = Path(cache_directory, f"{filename.stem}_{'_'.join(symbols) if symbols else 'all'}.joblib")
     # Check if the pickle file exists.
-    if filename_pickle.is_file():
-        # Display message to stdout that the data will be read from the pickle file.
-        msg_info(f"Reading data from previously saved pickle file: {filename_pickle}")
-        # Read the data from the pickle file.
-        data = read_pickle(filename_pickle)
+    if filename_joblib.is_file():
+        # Display message to stdout that the data will be read from the joblib file.
+        msg_info(f"Reading data from previously saved joblib file: {filename_joblib}")
+        # Read the data from the joblib file.
+        data = load(filename_joblib)
     else:
-        # Import the data from the CSV file and process it. This includes filtering by symbol(s), removing NaNs, and saving to a pickle file for caching.
-        data = process_data(filename=filename, symbols=symbols, filename_pickle=filename_pickle)
+        # Import the data from the CSV file and process it. This includes filtering by symbol(s), removing NaNs, and saving to a joblib file for caching.
+        data = process_data(filename=filename, symbols=symbols, filename_joblib=filename_joblib)
     # Perform one-hot encoding (OHE) for specified columns.
     data, columns_x = one_hot_encode_data(data=data, columns_one_hot_encoding=columns_one_hot_encoding, columns_x=columns_x)
     # Modify the the feature (X) column to include the new 'lagged_' column names.
