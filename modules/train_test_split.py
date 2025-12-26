@@ -22,16 +22,23 @@ NORMALIZE_METHODS = {
 ### FUNCTIONS ###
 #################
 def holdout(data, days):
-    # Define the final X dates that will be kept as the test set.
-    holdout = unique(data['t_d'].values)[-days:]
-    # Define the training dataset based on the opposite of the holdout.
-    data_train = data[~data['t_d'].isin(holdout)]
-    # Define the testing dataset based on the holdout for the final X days.
-    data_test = data[data['t_d'].isin(holdout)]
+    # Check if there are more than 0 days specified for holdout.
+    if days > 0:
+        # Define the final X dates that will be kept as the test set.
+        holdout = unique(data['t_d'].values)[-days:]
+        # Define the training dataset based on the opposite of the holdout.
+        data_train = data[~data['t_d'].isin(holdout)]
+        # Define the testing dataset based on the holdout for the final X days.
+        data_test = data[data['t_d'].isin(holdout)]
+    else:
+        # If not, then return $data as the training set and Nonetype for the testing set.
+        return data, None
     # Return the training and test datasets.
     return data_train, data_test
 
 def split_X_y(data, columns_x, columns_y):
+    # If $data is Nonetype then return Nonetype for both $X and $y.
+    if data is None: return None, None
     # Define the feature columns as a DataFrame.
     X = data[columns_x]
     # Define the label column(s), and use the `ravel` command to ensure there are no warnings during training later on.
@@ -40,6 +47,8 @@ def split_X_y(data, columns_x, columns_y):
     return X, y
 
 def one_hot_encode_data(data, columns_x, columns_one_hot_encoding):
+    # If $data is Nonetype then return Nonetype for both $data and $columns_x.
+    if data is None: return None, None
     # Check if the global variable has been defined for a list of columns to perform one-hot encoding (OHE) to.
     if columns_one_hot_encoding:
         # Iterate through each column name in the list.
@@ -54,6 +63,8 @@ def one_hot_encode_data(data, columns_x, columns_one_hot_encoding):
     return data, columns_x
 
 def apply_normalize(X, columns_x, normalize_method, scaler = None):
+    # If $X is Nonetype then return Nonetype for both $X and $scaler (which has already been set to Nonetype).
+    if X is None: return None, scaler
     # Check if the $scaler has not been fitted already.
     if not scaler:
         # Initialize the scaler.
@@ -82,18 +93,20 @@ def main(data, columns_x, columns_y, columns_one_hot_encoding, holdout_days, nor
     X_train, columns_x_ohe = one_hot_encode_data(data=X_train, columns_x=columns_x, columns_one_hot_encoding=columns_one_hot_encoding)
     # Split the test datasets into feature and label columns.
     X_test, y_test = split_X_y(data=data_test, columns_x=columns_x, columns_y=columns_y)
-    # Perform one-hot-encoding on the testing set. We don't need the columns X since it's already been defined when calling this function for the training set above.
-    X_test, _ = one_hot_encode_data(data=X_test, columns_x=columns_x, columns_one_hot_encoding=columns_one_hot_encoding)
-    # Reindex the testing features to match the training features. This ensures column alignment and handles categorical differences between sets.
-    X_test = X_test.reindex(columns=X_train.columns, fill_value=0)
-    # Check if any NaNs exist in the testing set after reindexing.
-    if X_test.isnull().values.any():
-        # Identify the boolean mask of rows that do not contain any NaNs.
-        mask = X_test.notnull().all(axis=1)
-        # Keep only the rows in the testing features that do not contain NaNs.
-        X_test = X_test[mask]
-        # Align the testing labels to match the rows kept in the testing features.
-        y_test = y_test[mask.values]
+    # Check if the test sets have been defined. If $holdout_days is 0 then these variables will be Nonetype.
+    if X_test and y_test:
+        # Perform one-hot-encoding on the testing set. We don't need the columns X since it's already been defined when calling this function for the training set above.
+        X_test, _ = one_hot_encode_data(data=X_test, columns_x=columns_x, columns_one_hot_encoding=columns_one_hot_encoding)
+        # Reindex the testing features to match the training features. This ensures column alignment and handles categorical differences between sets.
+        X_test = X_test.reindex(columns=X_train.columns, fill_value=0)
+        # Check if any NaNs exist in the testing set after reindexing.
+        if X_test.isnull().values.any():
+            # Identify the boolean mask of rows that do not contain any NaNs.
+            mask = X_test.notnull().all(axis=1)
+            # Keep only the rows in the testing features that do not contain NaNs.
+            X_test = X_test[mask]
+            # Align the testing labels to match the rows kept in the testing features.
+            y_test = y_test[mask.values]
     # Check if the variable to standardize the data was set to bool True.
     if normalize_X is True:
         # If so, then normalize the training set and return the fitted scaler.
