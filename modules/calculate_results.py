@@ -61,6 +61,8 @@ def calculate_average_scores(df_scores):
 ### MAIN ###
 ############
 def main(learner, random_seeds, total_score, total_cv_score, total_cv_std, save_results_to_file, output_filename):
+    # If the total score list is empty, then return bool False.
+    if all(total_score) is False: return False
     # Convert the lists of scores to a single Pandas DataFrame.
     df_scores = convert_to_dataframe(
                     learner=learner,
