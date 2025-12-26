@@ -94,7 +94,7 @@ def main(data, columns_x, columns_y, columns_one_hot_encoding, holdout_days, nor
     # Split the test datasets into feature and label columns.
     X_test, y_test = split_X_y(data=data_test, columns_x=columns_x, columns_y=columns_y)
     # Check if the test sets have been defined. If $holdout_days is 0 then these variables will be Nonetype.
-    if X_test and y_test:
+    if (X_test is not None) and (y_test is not None):
         # Perform one-hot-encoding on the testing set. We don't need the columns X since it's already been defined when calling this function for the training set above.
         X_test, _ = one_hot_encode_data(data=X_test, columns_x=columns_x, columns_one_hot_encoding=columns_one_hot_encoding)
         # Reindex the testing features to match the training features. This ensures column alignment and handles categorical differences between sets.
