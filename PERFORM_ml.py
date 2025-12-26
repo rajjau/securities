@@ -100,7 +100,6 @@ def main(filename):
         filename=filename,
         symbols=symbols,
         cache_directory=Path(ROOT, configuration['GENERAL']['cache_directory']).absolute(),
-        columns_one_hot_encoding=convert_to_list(string=configuration['DATA']['columns_one_hot_encoding'], delimiter=','),
         columns_x=convert_to_list(string=configuration['DATA']['columns_x'], delimiter=',')
     )
     # Define the label column(s) (y).
@@ -112,10 +111,11 @@ def main(filename):
     #--- Train/Test Split ---#
     #------------------------#
     # Split the data into training and testing datasets.
-    X_train, X_test, y_train, y_test = train_test_split(
+    X_train, X_test, y_train, y_test, columns_x = train_test_split(
         data=data,
         columns_x=columns_x,
         columns_y=columns_y,
+        columns_one_hot_encoding=convert_to_list(string=configuration['DATA']['columns_one_hot_encoding'], delimiter=','),
         holdout_days=int(configuration['DATA']['holdout_days']),
         normalize_X=True,
         normalize_method=configuration['NORMALIZATION']['normalize_method'],
