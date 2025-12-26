@@ -240,12 +240,16 @@ def main(X_train, X_test, y_train, y_test, name, symbols, perform_cross_validati
     if perform_cross_validation is True: score_cv, score_cv_stddev = cross_validation(model=model, X=X_train, y=y_train, cross_validation_folds=cross_validation_folds)
     # Fit the $model to the training data.
     model.fit(X_train, y_train)
-    # Calculate the accuracy of the trained $model on the test dataset.
-    score = predict(model=model, X_test=X_test, y_test=y_test)
-    # Define the name of the file to save the model to, if applicable.
-    saved_model = saved_model_filename(name=name, symbols=symbols, random_state=random_state)
-    # If the $score is greater than or equal to the set threshold, save the model to an output file in the current working directory.
-    save(saved_model=saved_model, model=model, score=score, save_threshold=save_threshold)
+    # Check if the test set has been defined.
+    if X_test and y_test:
+        # Calculate the accuracy of the trained $model on the test dataset.
+        score = predict(model=model, X_test=X_test, y_test=y_test)
+        # Define the name of the file to save the model to, if applicable.
+        saved_model = saved_model_filename(name=name, symbols=symbols, random_state=random_state)
+        # If the $score is greater than or equal to the set threshold, save the model to an output file in the current working directory.
+        save(saved_model=saved_model, model=model, score=score, save_threshold=save_threshold)
+    else:
+        # If not, then set the performance score to Nonetype.
+        score = None
     # Return the model and its scores for the current seed.
     return score, score_cv, score_cv_stddev
-
