@@ -13,9 +13,14 @@ from sklearn.tree import DecisionTreeClassifier
 #################
 def apply_selected_features(X_train, X_test, selected_features):
     """Apply the selected features to both the training and testing datasets."""
-    # Update the training and testing data to only include the selected features.
+    # Update the training data to only include the selected features.
     X_train = X_train[selected_features]
-    X_test = X_test[selected_features]
+    try:
+        # Do the same for the test set.
+        X_test = X_test[selected_features]
+    except TypeError:
+        # If the test set has not been defined, then do nothing.
+        pass
     # Return the modified training and testing datasets.
     return X_train, X_test
 
@@ -35,7 +40,7 @@ def select_k_best(X, y, feature_names):
     """Perform SelectKBest feature selection to select features based on mutual information."""
     # Initialize the function. See:
     # https://scikit-learn.org/stable/modules/generated/sklearn.feature_selection.SelectKBest.html
-    selector = SelectKBest(mutual_info_classif, k = 10)
+    selector = SelectKBest(mutual_info_classif, k = 25)
     # Fit and transform the training data.
     selector.fit_transform(X = X, y = ravel(y))
     # Define the selected features.
