@@ -13,7 +13,7 @@ def main(data, name, drop_and_replace = False):
     # Perform OHE with the specified $column name. Here, the column must be a DataFrame rather than a Series.
     column_ohe = ohe.fit_transform(DataFrame(column))
     # Create the DataFrame that contains the OHE columns, where descriptive names (based on the original values) are used.
-    column_ohe = DataFrame(column_ohe, columns = ohe.get_feature_names_out([name]))
+    column_ohe = DataFrame(column_ohe, columns=ohe.get_feature_names_out([name]), index=data.index)
     # Define the column names to be returned later on.
     names_ohe = column_ohe.columns.to_list()
     # Check if the variable to drop the original column and add the new OHE columns was set to bool True.
@@ -23,7 +23,7 @@ def main(data, name, drop_and_replace = False):
         # Now add the new OHE columns to $data.
         data = concat([data, column_ohe], axis = 1)
         # Return the full $data.
-        return(data, names_ohe)
+        return data, names_ohe
     else:
         # Otherwise, return only the OHE columns.
-        return(column_ohe, names_ohe)
+        return column_ohe, names_ohe
