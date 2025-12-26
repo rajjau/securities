@@ -1,18 +1,52 @@
-I have historical stock data for the past 2 years, which provides daily data. My task is to predict whether the closing price of a stock will be greater than the opening price (class = 1), or not (class = 0). As an overview, my workflow is to first obtain all data from Polygon.io, specifically daily data. This provides the following features for every symbol:
-
-	a) Opening price (‘o’)
-	b) Closing price (‘c’)
-	c) The trading volume for the given time period (‘v’)
-	d) Highest price for the given time period (‘h’)
-	e) Lowest price for the given time period (‘l’)
-	f) Number of transactions within the aggregate window (’n’)
-	g) Volume weighted average price ('vw')
-
-
-For a given symbol, training is performed using the current day's opening price and lagged features from previous days, up to 15 days total.
-
-Next, features are added such as the day of the week (e.g., ‘Monday’, ‘Tuesday’, etc.) and the class labels for whether the closing price is greater than the opening price, or not. Additionally, technical indicators (i.e., moving averages, momentum, rate of change, volatility, rolling min, max, and range, and z-score of returns), candlestick features (i.e., candleand relative body, upper and lower shadow), interaction features (i.e., close, return, and spread volume), and calendar features (i.e., month, quarter, day of month, cyclical encoding for day of week (7-day cycle), cyclical encoding for day of month (variable-length cycle)), and the lagged high-low spread and the lagged daily return for all previous days were also calculated. Finally, any row was NaNs are removed entirely rather than replacing them. The data is now saved to a CSV file.
-
-Before classification can be performed, preprocessing of the data is completed. The data is then split into training and test sets, where the last 120 days are used as the test set while every other day is used for training. One-Hot encoding is then performed on features with string values such as the day of the week. Normalization is then performed, where the training and test sets are normalized separately. Here, the fitted scaler from the training set is used for the test set.
-
-It's now time for machine learning (ML). Performance is averaged over 25 random seeds to get a robust score. Within each random seed, hyperparameter optimization via RandomizedSearchCV is used to identify the best hyper-parameters for each of the following classifiers: Logistic Regression, Decision Tree, SVC. Here, TimeSeriesSplit() with the f1_macro scoring function was used for 5-fold CV to identify the best model. The best model is then used in CV to calculate its CV score and standard deviation. Again 5-fold TimeSeriesSplit with the f1_macro scoring function was used. Finally, the best model was used on the test set to get the final performance. The score function used was f1_macro. After all seeds are done I average the scores over all seeds.
+ I have historical stock data since 2023, which provides daily data. My task is to predict whether the closing price of a stock will be greater than the opening price (class = 1), or not (class = 0). This is my workflow:
+	1. Parse command‑line argument to obtain the input CSV filename.
+	2. Validate and load configuration settings from configuration.ini.
+	3. Import and preprocess financial data using the configured symbols and feature columns.
+		A. Basic Price Comparison: The script first identifies the relationship between the opening and closing prices. It creates a binary column (close_greater_than_open) that marks whether a stock finished the day higher than it started.
+		B. Time and Date Normalization: It converts Unix millisecond timestamps into human-readable dates. It extracts the specific day of the week and creates "lagged" date labels (e.g., identifying what the previous day was) to help the model understand weekly patterns.
+		C. Lagged Feature Generation: The script looks back up to 15 days (LAGGED_MAX_DAYS) to create historical reference points. For every day, it generates:
+			i. Past OHLCV values (Open, High, Low, Close, Volume)
+			ii. Historical price spreads and daily returns
+			iii. Memory Optimization: It converts these values to float32 to reduce RAM usage.
+		D. Technical Indicator Calculation: It calculates various standard trading indicators over multiple time windows (5 to 200 days), including:
+			i. Trend: SMA (Simple Moving Average) and EMA (Exponential Moving Average).
+			ii. Momentum: Rate of Change (ROC) and standard momentum.
+			iii. Volatility: Standard deviation of returns and Z-scores.
+			iv. Range: Rolling highs and lows.
+		E. Candlestick Pattern Analysis: The script breaks down the "geometry" of each trading day’s price action by calculating:
+			i. Candle Body: The absolute difference between open and close.
+			ii. Shadows: The length of the "wicks" (upper and lower) relative to the price range.
+			iii. Relative Body: How large the candle body is compared to the total day's range.
+		F. Interaction Feature Engineering: It creates "Interaction" features by multiplying different data types to find hidden correlations, such as:
+			i. Price × Volume: To see the dollar flow.
+			ii. Spread × Volume: To measure the intensity of trading during high volatility.
+		G. Cyclical Calendar Encoding: To help a machine learning model understand that time is circular (e.g., Monday is close to Sunday, and December is close to January), the script:
+			i. Extracts month, quarter, and month-end flags.
+			ii. Uses Sine and Cosine transforms to encode days of the week and month as coordinates on a circle.
+	4. Compute baseline accuracy from the class distribution of the label column(s).
+	5. Split the dataset into training and testing sets using a time‑based holdout period, normalization, and optional one‑hot encoding.
+		A. Time-Based Holdout Split: The script ensures the model is evaluated fairly by splitting the data chronologically. It takes the last  days of data as a holdout (test) set and uses everything prior for the **training set**. This prevents "look-ahead bias," where a model accidentally learns from future information to predict the past.
+		B. Feature-Label Separation: Separates the dataset into two distinct parts:
+			i. X (Features): The inputs or indicators used to make a prediction.
+			ii. y (Labels): The target value the model is trying to learn (e.g., price movement). The script uses `ravel()` on the labels to flatten the data structure, which prevents common formatting warnings in Scikit-Learn.
+		C. Categorical Encoding (One-Hot Encoding): Converts categorical text data (like "Day of the Week") into binary columns (0s and 1s). It carefully handles the test set to ensure its columns match the training set exactly, filling in zeros if a specific category appears in one set but not the other.
+		D. Data Normalization: To prevent features with large numbers (like Volume) from overpowering features with small numbers (like Daily Return), the script applies one of three scaling methods:
+			i. StandardScaler: Centers data around a mean of 0 with a standard deviation of 1.
+			ii. MinMaxScaler: Rescales data into a specific range, usually 0 to 1.
+			iii. RobustScaler: Scales data using the interquartile range, making it resistant to outliers.
+		Crucial Detail: The script fits the scaler only on the training data and then applies that same transformation to the test data. This simulates a real-world scenario where the "future" scale is unknown.
+		E. Alignment and Cleaning: Finally, the script performs a "reindexing" step. It makes sure the test set has the exact same columns as the training set and removes any rows that might have resulted in null values (NaNs) during the transformation process.
+	6. Optionally perform feature selection and update the training/testing feature matrices.
+		A. Initialization and Column Formatting: The script converts the list of column names into a Pandas Index format. This allows the script to use mathematical masks to filter and select specific columns easily.
+		B. Variance Threshold Filtering: The script identifies and removes "stagnant" features. Any column where the data doesn't change much (variance below 0.1) is discarded because it doesn't provide enough information for a model to learn from.
+		C. [OPTIONAL] Mutual Information Selection (SelectKBest): It uses a "Mutual Information" classifier to rank the remaining features. This statistical method measures how much information one variable provides about another. The script specifically picks the top 25 features that have the strongest relationship with the target label.
+		D. [OPTIONAL] Recursive Feature Elimination (RFECV): This advanced method uses a Decision Tree to repeatedly train on subsets of data, pruning away the least important features one by one until only the most predictive ones remain. It uses TimeSeriesSplit to ensure the selection is valid for chronological data.
+		E. Dataset Transformation: After the best features are identified, the script applies those selections to both the training and testing datasets. This ensures that the final output only contains the high-value columns, reducing the complexity and improving the speed of the machine learning model.
+		F. Final Output: The script returns the streamlined training features, testing features, and a list of the names of the columns that were kept.
+	7. For each machine‑learning algorithm listed in the configuration:
+		A. Initialize accumulators for metrics.
+		B. For each random seed:
+			i. Train the model using the specified settings (cross‑validation, hyperparameter optimization, etc.).
+			ii. Collect test accuracy, cross‑validation score, and cross‑validation standard deviation.
+			iii. Aggregate metrics across all seeds for each learner.
+			iv. Optionally save aggregated results to RESULTS_<LEARNER>.csv.
