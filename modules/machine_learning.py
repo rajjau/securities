@@ -241,7 +241,7 @@ def main(X_train, X_test, y_train, y_test, name, symbols, perform_cross_validati
     # Fit the $model to the training data.
     model.fit(X_train, y_train)
     # Check if the test set has been defined.
-    if X_test and y_test:
+    if (X_test is not None) and (y_test is not None):
         # Calculate the accuracy of the trained $model on the test dataset.
         score = predict(model=model, X_test=X_test, y_test=y_test)
         # Define the name of the file to save the model to, if applicable.
