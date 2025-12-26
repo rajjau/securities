@@ -28,20 +28,17 @@ def convert_to_dataframe(learner, random_seeds, total_score, total_cv_score, tot
     return df_scores
 
 def rank_scores(df_scores, learner):
-    """Rank scores using a composite score and tier system."""
+    """Rank scores using a composite score and tier system tailored for financial prediction."""
     # Create a copy of the DataFrame to work with.
     df = df_scores.copy()
-    # Compute difference between:
-    # 1) The performance of the test set.
-    # 2) The difference between the performance of the test set AND cross-validation store.
-    # 3) The cross-validation standard deviation.
-    df['Score'] = df[learner] - (df[learner]- df['CrossVal']) - df['CrossValStddev']
-    # Create a tier flag to ensure higher tiers are sorted above lower ones. If there's only one tier, then the DataFrame is sorted by the above Score column.
-    # Tier 1: Performance >= 0.50
-    # Tier 0: Performance < 0.50
-    df['Tier'] = (df[learner] >= 0.50).astype(int)
-    # Sort by tier and then by score.
-    df = df.sort_values(by = ['Tier', 'Score'], ascending=[False, False])
+    # Compute a generalization score by subtracting the cross-validation standard deviation from the cross-validation score.
+    df['GeneralizationScore'] = df['CrossVal'] - df['CrossValStddev']
+    # Compute a composite score that prioritizes cross-validation performance, stability, and then test-set performance.
+    df['CompositeScore'] = (0.70 * df['CrossVal']) + (0.20 * df['GeneralizationScore']) + (0.10 * df[learner])
+    # Create a tier flag to ensure higher tiers are sorted above lower ones. Tier 1: CrossVal >= 50. Tier 0: CrossVal < 50.
+    df['Tier'] = (df['CrossVal'] >= 50).astype(int)
+    # Sort by tier, then by composite score, and finally by generalization score.
+    df = df.sort_values(by=['Tier', 'CompositeScore', 'GeneralizationScore'], ascending=[False, False, False])
     # Apply the index from the new $df DataFrame to the original DataFrame. This ensures that we keep the original columns, just reordered.
     df_scores = df_scores.loc[df.index].reset_index(drop = True)
     # Return the sorted DataFrame.
