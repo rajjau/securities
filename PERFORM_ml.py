@@ -161,6 +161,7 @@ def main(filename):
                 perform_hyperparameter_optimization=convert_to_bool(configuration['GENERAL']['perform_hyperparameter_optimization']),
                 random_state=seed,
                 save_threshold=float(configuration['ML']['save_threshold']),
+                retrain_step_frequency=int(configuration['ML']['retrain_step_frequency'])
             )
             # Add the score for the current $learner for the current $seed.
             total_score.append(score_seed)
