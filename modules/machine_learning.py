@@ -1,23 +1,12 @@
 #!/usr/bin/env python
 from joblib import dump
-from numpy import arange, inf
+from importlib import import_module
+from numpy import inf
 from pathlib import Path
 from pandas import concat, Series
-from scipy.linalg import LinAlgWarning
-from sklearn.exceptions import FitFailedWarning
 from sklearn.metrics import f1_score
-from sklearn.model_selection import cross_val_score, GridSearchCV, RandomizedSearchCV, TimeSeriesSplit
-from warnings import filterwarnings
-
-#-------------------#
-#--- CLASSIFIERS ---#
-#-------------------#
-from sklearn.ensemble import BaggingClassifier
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.linear_model import LogisticRegression, RidgeClassifierCV
-from sklearn.svm import SVC
+from sklearn.model_selection import cross_val_score, RandomizedSearchCV, TimeSeriesSplit
+from yaml import safe_load
 
 ######################
 ### CUSTOM MODULES ###
@@ -26,99 +15,48 @@ from modules.date_and_time import main as date_and_time
 from modules.messages import msg_info,msg_warn
 
 ################
-### SETTINGS ###
-################
-# Maximum number of iterations.
-MAX_ITER = 99999999
-
-################
 ### WARNINGS ###
 ################
-# Filter warnings that occurs when using hyperparameter optimization.
+from scipy.linalg import LinAlgWarning
+from sklearn.exceptions import FitFailedWarning
+from warnings import filterwarnings
+
 filterwarnings('ignore', category = FitFailedWarning)
 filterwarnings('ignore', category = LinAlgWarning)
 filterwarnings('ignore', category = UserWarning)
 
-###################
-### CLASSIFIERS ###
-###################
-# Define a dictionary that contains all learners and their hyperparameters to use.
+################
+### LEARNERS ###
+################
+# Global dictionaries to store config
 learners = {}
-learners['Bagging'] = BaggingClassifier(n_jobs = -1)
-learners['Decision Tree'] = DecisionTreeClassifier()
-learners['K Nearest Neighbor'] = KNeighborsClassifier(n_jobs = -1)
-learners['Logistic Regression'] = LogisticRegression(max_iter = MAX_ITER, n_jobs = None)
-learners['Random Forest'] = RandomForestClassifier(n_jobs = -1)
-learners['Ridge CV'] = RidgeClassifierCV()
-learners['SVC'] = SVC()
-
-###################################
-### HYPERPARAMETER OPTIMIZATION ###
-###################################
-# Define a dictionary that contains all learners to perform hyperparameter optimization with.
 learners_hyperparameters = {}
 
-learners_hyperparameters['Bagging'] = {
-    'bootstrap': [True, False],
-    'bootstrap_features': [True, False],
-    'estimator': {'Decision Tree': learners['Decision Tree'],
-                  'Logistic Regression': learners['Logistic Regression']
-                  },
-    'n_estimators': [10]
-}
-
-learners_hyperparameters['Decision Tree'] = {
-    'class_weight': ['balanced', None],
-    'criterion': ['entropy', 'gini', 'log_loss'],
-    'max_depth': [5, 10, 20, 50, 100, None],
-    'max_features': ['log2', 'sqrt', None],
-    'max_leaf_nodes': [5, 10, 20, 50, 100, None],
-    'min_samples_leaf': [1, 2, 5, 10],
-    'min_samples_split': [2, 5, 10, 20],
-    'splitter': ['best', 'random']
-}
-
-learners_hyperparameters['K Nearest Neighbor'] = {
-    'algorithm': ['ball_tree', 'brute', 'kd_tree'],
-    'n_neighbors': range(1, 25),
-    'weights': ['distance', 'uniform', None]
-}
-
-learners_hyperparameters['Logistic Regression'] = {
-    'C': [arange(0.01, 1.01, 0.01), inf],
-    'class_weight': ['balanced', None],
-    'l1_ratio': arange(0, 1.05, 0.05),
-    'solver': ['lbfgs', 'liblinear', 'newton-cg', 'newton-cholesky', 'sag', 'saga'],
-    'tol': [0.1, 0.01, 0.001, 0.0001, 0.00001]
-}
-
-learners_hyperparameters['Random Forest'] = {
-    'bootstrap': [True, False],
-    'class_weight': ['balanced', 'balanced_subsample'],
-    'criterion': ['entropy', 'gini', 'log_loss'],
-    'max_depth': [10, 50, 100, None],
-    'max_features': ['log2', 'sqrt', None],
-    'max_leaf_nodes': [10, 100, None],
-    'n_estimators': [100, 200, 250]
-}
-
-learners_hyperparameters['Ridge CV'] = {
-    'alphas': arange(0.01, 1.01, 0.01),
-    'class_weight': ['balanced', None],
-    'scoring': ['f1_macro']
-}
-
-learners_hyperparameters['SVC'] = {
-    'C': arange(0.01, 1.01, 0.01),
-    'class_weight': ['balanced', None],
-    'coef0': arange(0.0, 10.01, 0.01),
-    'decision_function_shape': ['ovo', 'ovr'],
-    'degree': arange(1, 10, 1),
-    'gamma': ['scale', 'auto'],
-    'kernel': ['linear', 'poly', 'rbf', 'sigmoid'],
-    'shrinking': [True, False],
-    'tol': [0.1, 0.01, 0.001, 0.0001, 0.00001]
-}
+def load_learners(learners_yaml):
+    # Access the global dictionaries so they can be populated for use in other functions.
+    global learners, learners_hyperparameters
+    # Open the YAML file and load the 'LEARNERS' section into a configuration dictionary.
+    with open(learners_yaml, 'r') as f: config = safe_load(f)['LEARNERS']
+    # Iterate through each learner defined in the configuration.
+    for name, info in config.items():
+        # Split the class string so the learner can be imported. For example, sklearn.ensemble.BaggingClassifier -> [sklearn.ensemble, BaggingClassifier].
+        module_path, class_name = info['class'].rsplit('.', 1)
+        # Dynamically import the required module.
+        module = import_module(module_path)
+        # Retrieve the model class from the imported module.
+        model_class = getattr(module, class_name)
+        # Extract the fixed parameters from the configuration.
+        fixed_params = info.get('params', {})
+        # Instantiate the learner using the fixed parameters and store it in the global $learners dictionary.
+        learners[name] = model_class(**fixed_params)
+        # Extract the optimization parameters.
+        optimization_params = info.get('optimization', {})
+        # Check if the current learner is Logistic Regression to handle the infinity string conversion.
+        if name == 'Logistic Regression' and 'C' in optimization_params:
+            # Convert the '.inf' string from YAML into a float infinity value.
+            optimization_params['C'] = [inf if x == '.inf' else x for x in optimization_params['C']]
+        # Store the search grid in the global $learners_hyperparameters dictionary.
+        learners_hyperparameters[name] = optimization_params
 
 #################
 ### FUNCTIONS ###
@@ -135,42 +73,53 @@ def set_universal_params(model, random_state):
 def hyperparameter_optimization(X_train, y_train, name, cross_validation_folds, random_state):
     try:
         # Obtain the parameters from the dictionary defined above.
-        params = learners_hyperparameters[name]
+        # We use .copy() to prevent modifying the global dictionary during recursion.
+        params = learners_hyperparameters[name].copy()
     except KeyError:
         # If no hyperparameters were defined for $name, then raise an error.
-        msg_warn(f"The following learner name has not entries within the hyperparameter dictionary defined in this script: '{name}'")
-        # Return the defult learner instead.
+        msg_warn(f"The following learner name has no entries within the hyperparameter dictionary: '{name}'")
+        # Return the default learner instead.
         return learners[name]
-    # Check if the current model is the Bagging, which is a meta-estimator.
+    # Check if the current model is Bagging to handle its sub-estimators.
     if name == 'Bagging':
-        # Define all estimators.
-        estimators = params['estimator']
-        # Define a list that will replace the current dictionary of estimators. This will include only the estimators with the best parameters that are chosen from hyperparameter optimization.
-        best_estimators = [
-            hyperparameter_optimization(
+        # Retrieve the list of potential base estimators (e.g., ['Decision Tree', 'Logistic Regression']).
+        estimator_options = params.pop('estimator_options', [])
+        # Define a list to store the optimized versions of these base estimators.
+        best_base_models = []
+        for est_name in estimator_options:
+            # Recursively call this function to find the best hyperparameters for the base learner.
+            msg_info(f"Optimizing base estimator '{est_name}' for the Bagging ensemble...")
+            optimized_base = hyperparameter_optimization(
                 X_train=X_train, 
                 y_train=y_train, 
-                name=estimator, 
+                name=est_name, 
                 cross_validation_folds=cross_validation_folds, 
                 random_state=random_state
-            ) for estimator in estimators
-        ]
-        # Replace the old dictionary with the new list of chosen models.
-        learners_hyperparameters[name]['estimator'] = best_estimators
+            )
+            best_base_models.append(optimized_base)
+        # Update the parameter grid to include the optimized model objects under the 'estimator' key.
+        params['estimator'] = best_base_models
     # Define a time series split object.
     timeseries_k_fold = TimeSeriesSplit(n_splits = cross_validation_folds)
     # Define the learner.
     model = learners[name]
     # Set universal parameters.
     model = set_universal_params(model=model, random_state=random_state)
-    # Define the GridSearchCV object.
-    # search = GridSearchCV(cv=timeseries_k_fold, estimator=model, param_grid=params, scoring='f1_macro')
-    search = RandomizedSearchCV(cv=timeseries_k_fold, estimator=model, n_jobs=-1, param_distributions=params, random_state=random_state, scoring='f1_macro')
+    # Define the RandomizedSearchCV object.
+    search = RandomizedSearchCV(
+        cv = timeseries_k_fold, 
+        estimator = model, 
+        n_jobs = -1, 
+        param_distributions = params, 
+        random_state = random_state, 
+        scoring = 'f1_macro',
+        n_iter = 10
+    )
     # Fit the model with all combinations of hyperparameters to the training data.
     search.fit(X_train, y_train)
     # Identify the model with the best performance.
     best_model = search.best_estimator_
-    # Return the model.
+    # Return the $best_model.
     return best_model
 
 def cross_validation(model, X, y, cross_validation_folds):
@@ -245,50 +194,54 @@ def save(saved_model, model, score, save_threshold):
 ############
 ### MAIN ###
 ############
-def main(X_train, X_test, y_train, y_test, name, symbols, perform_cross_validation, cross_validation_folds, perform_hyperparameter_optimization, random_state, save_threshold, retrain_step_frequency):
-    # Check if hyperparameter optimization is enabled in the configuration.
+def main(X_train, y_train, X_test, y_test, name, learners_yaml, symbols, random_state, perform_hyperparameter_optimization, perform_cross_validation, cross_validation_folds, retrain_step_frequency, save_threshold):
+    # Load the machine learning configuration from the $learners_yaml file to populate the global dictionaries.
+    load_learners(learners_yaml=learners_yaml)
+    # Check if the $perform_hyperparameter_optimization toggle is enabled.
     if perform_hyperparameter_optimization is True:
-        # Perform optimization to find the best model parameters using the initial training set.
-        model = hyperparameter_optimization(X_train=X_train,
-                                            y_train=y_train,
-                                            name=name,
-                                            cross_validation_folds=cross_validation_folds,
-                                            random_state=random_state
-                                            )
+        # Perform optimization to find the best model parameters using the $X_train and $y_train sets.
+        model = hyperparameter_optimization(
+            X_train=X_train,
+            y_train=y_train,
+            name=name,
+            cross_validation_folds=cross_validation_folds,
+            random_state=random_state
+        )
     else:
-        # Otherwise, retrieve the default model settings for the specified learner.
+        # Otherwise, retrieve the default model settings for the specified $name.
         model = learners[name]
-    # Apply the current random seed and other universal settings to the model.
+    # Apply the $random_state and other universal settings to the $model.
     model = set_universal_params(model=model, random_state=random_state)
-    # Initialize cross-validation scores to None to handle cases where validation is skipped.
+    # Initialize cross-validation variables to None to handle cases where validation is skipped.
     score_cv = None
-    # Initialize cross-validation standard deviation to None.
     score_cv_stddev = None
-    # If enabled, execute time-series cross-validation on the training data to measure historical stability.
+    # If the $perform_cross_validation toggle is enabled, execute time-series validation on the training data.
     if perform_cross_validation is True:
-        score_cv, score_cv_stddev = cross_validation(model=model,
-                                                     X=X_train,
-                                                     y=y_train,
-                                                     cross_validation_folds=cross_validation_folds
-                                                     )
+        score_cv, score_cv_stddev = cross_validation(
+            model=model,
+            X=X_train,
+            y=y_train,
+            cross_validation_folds=cross_validation_folds
+        )
     # Ensure both features and labels exist for the test set before proceeding to prediction.
     if (X_test is not None) and (y_test is not None):
-        # Calculate the rolling performance score by incrementally updating the model across the test period.
-        score = train_predict_rolling(model=model,
-                                      X_train=X_train,
-                                      y_train=y_train,
-                                      X_test=X_test,
-                                      y_test=y_test,
-                                      retrain_step_frequency=retrain_step_frequency
-                                      )
+        # Calculate the rolling performance score by incrementally updating the $model across the test period.
+        score = train_predict_rolling(
+            model=model,
+            X_train=X_train,
+            y_train=y_train,
+            X_test=X_test,
+            y_test=y_test,
+            retrain_step_frequency=retrain_step_frequency
+        )
     else:
-        # Train the model on the entire training set.
+        # Train the $model on the entire training set if no test data is available.
         model.fit(X_train, y_train)
-        # Set the score to None if no test data was provided for evaluation.
+        # Set the $score to None as no evaluation was performed.
         score = None
-    # Generate a unique filename for the model based on its name, symbols, and seed.
+    # Generate a unique filename for the $model based on its $name, $symbols, and $random_state.
     saved_model = saved_model_filename(name=name, symbols=symbols, random_state=random_state)
-    # Save the model to disk if its rolling performance score meets or exceeds the required threshold.
+    # Save the $model to disk if the rolling performance meets or exceeds the $save_threshold.
     save(saved_model=saved_model, model=model, score=score, save_threshold=save_threshold)
-    # Return the final rolling score, the cross-validation mean, and the cross-validation standard deviation.
+    # Return the final rolling $score, the cross-validation mean, and the standard deviation.
     return score, score_cv, score_cv_stddev
