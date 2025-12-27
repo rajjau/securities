@@ -24,6 +24,9 @@ ROOT = Path(__file__).parent.resolve()
 # Path to the configuration INI file.
 CONFIG_INI = Path(ROOT, 'configuration.ini')
 
+# Path to the YAML file containing all learners.
+LEARNERS_YAML = Path(ROOT, 'learners.yaml')
+
 #################
 ### FUNCTIONS ###
 #################
@@ -52,7 +55,7 @@ def calculate_baseline_accuracy(counts):
     # Display the baseline accuracy to stdout.
     msg_info(f"Num. of Class 0: {counts[0.0]} | Num. of Class 1: {counts[1.0]} | Baseline: {baseline_accuracy:.2%}")
 
-def data_feature_selection(columns_x, X_train, y_train, X_test, perform_feature_selection):
+def data_feature_selection(X_train, y_train, X_test, columns_x, perform_feature_selection):
     # Create a border to denote a process.
     border('FEATURE SELECTION', border_char='><')
     if perform_feature_selection:
@@ -82,6 +85,8 @@ def main(filename):
     #---------------------#
     # Verify the configuration file exists.
     is_file(CONFIG_INI, exit_on_error=True)
+    # Verify the learners YAML file exists.
+    is_file(LEARNERS_YAML, exit_on_error=True)
     # Initiate the configuration parser.
     configuration_ini = ConfigParser()
     # Read the configuration INI file.
@@ -118,17 +123,17 @@ def main(filename):
         columns_one_hot_encoding=convert_to_list(string=configuration['DATA']['columns_one_hot_encoding'], delimiter=','),
         holdout_days=int(configuration['DATA']['holdout_days']),
         normalize_X=True,
-        normalize_method=configuration['NORMALIZATION']['normalize_method'],
+        normalize_method=configuration['NORMALIZATION']['normalize_method']
     )
     #-------------------------#
     #--- Feature Selection ---#
     #-------------------------#
     # Perform feature selection.
     X_train, X_test = data_feature_selection(
-        columns_x=columns_x,
         X_train=X_train,
         y_train=y_train,
         X_test=X_test,
+        columns_x=columns_x,
         perform_feature_selection=convert_to_bool(configuration['GENERAL']['perform_feature_selection'])
     )
     #------------------------#
@@ -151,17 +156,18 @@ def main(filename):
             # Perform machine learning.
             score_seed, score_cv_seed, score_cv_stddev_seed = machine_learning(
                 X_train=X_train,
-                X_test=X_test,
                 y_train=y_train,
+                X_test=X_test,
                 y_test=y_test,
                 name=learner,
+                learners_yaml=LEARNERS_YAML,
                 symbols=symbols,
+                random_state=seed,
+                perform_hyperparameter_optimization=convert_to_bool(configuration['GENERAL']['perform_hyperparameter_optimization']),
                 perform_cross_validation=convert_to_bool(configuration['GENERAL']['perform_cross_validation']),
                 cross_validation_folds=int(configuration['ML']['cross_validation_folds']),
-                perform_hyperparameter_optimization=convert_to_bool(configuration['GENERAL']['perform_hyperparameter_optimization']),
-                random_state=seed,
-                save_threshold=float(configuration['ML']['save_threshold']),
-                retrain_step_frequency=int(configuration['ML']['retrain_step_frequency'])
+                retrain_step_frequency=int(configuration['ML']['retrain_step_frequency']),
+                save_threshold=float(configuration['ML']['save_threshold'])
             )
             # Add the score for the current $learner for the current $seed.
             total_score.append(score_seed)
@@ -176,10 +182,10 @@ def main(filename):
         # Calculate and display the average scores for the current learner across all random seeds.
         calculate_results(
             learner=learner,
-            random_seeds=random_seeds,
             total_score=total_score,
             total_cv_score=total_cv_score,
             total_cv_std=total_cv_std,
+            random_seeds=random_seeds,
             save_results_to_file=convert_to_bool(configuration['GENERAL']['save_results_to_file']),
             output_filename=output_filename
         )
