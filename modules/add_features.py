@@ -11,7 +11,7 @@ from modules.messages import msg_info
 ### SETTINGS ###
 ################
 LAGGED_MAX_DAYS = 15
-MOVING_AVERAGE_WINDOWS = [5, 10, 15, 20, 50, 100, 200]
+MOVING_AVERAGE_WINDOWS = [5, 10, 15, 20, 50]
 
 #################
 ### FUNCTIONS ###
@@ -76,8 +76,7 @@ def add_lagged_features(data):
     # Generate lagged OHLCV columns and derived features in a single pass.
     for previous_day in range(1, LAGGED_MAX_DAYS + 1):
         # Create lagged OHLCV columns.
-        for col in ['c', 'h', 'l', 'n', 'o', 'v', 'vw']:
-            new_cols[f"lagged_{col}_{previous_day}"] = grouped[col].shift(previous_day)
+        for col in ['c', 'h', 'l', 'n', 'o', 'v', 'vw']: new_cols[f"lagged_{col}_{previous_day}"] = grouped[col].shift(previous_day)
         # Compute derived lagged features using the newly created lagged columns.
         lagged_high = grouped['h'].shift(previous_day)
         lagged_low = grouped['l'].shift(previous_day)
@@ -105,23 +104,23 @@ def add_technical_indicators(data):
     data = data.sort_values(by=['T','t'])
     # Precompute groupby once for major speed improvement.
     grouped = data.groupby('T')
-    # Precompute daily returns.
-    returns = grouped['c'].transform(lambda entry: entry.pct_change())
+    # Precompute daily returns (SHIFTED to avoid leakage).
+    returns = grouped['c'].transform(lambda entry: entry.pct_change().shift(1))
     # Compute all window-based indicators.
     for window in MOVING_AVERAGE_WINDOWS:
-        # Simple Moving Average (SMA).
-        data[f"sma_{window}"] = grouped['c'].transform(lambda entry: entry.rolling(window).mean())
-        # Exponential Moving Average (EMA).
-        data[f"ema_{window}"] = grouped['c'].transform(lambda entry: entry.ewm(span=window,adjust=False).mean())
-        # Momentum.
-        data[f"momentum_{window}"] = grouped['c'].transform(lambda entry: entry - entry.shift(window))
-        # Rate of Change (ROC).
-        data[f"roc_{window}"] = grouped['c'].transform(lambda entry: (entry - entry.shift(window)) / entry.shift(window))
+        # Simple Moving Average (SMA) - Shifted to use previous window.
+        data[f"sma_{window}"] = grouped['c'].transform(lambda entry: entry.rolling(window).mean().shift(1))
+        # Exponential Moving Average (EMA) - Shifted to use previous window.
+        data[f"ema_{window}"] = grouped['c'].transform(lambda entry: entry.ewm(span=window,adjust=False).mean().shift(1))
+        # Momentum - Shifted to use previous window.
+        data[f"momentum_{window}"] = grouped['c'].transform(lambda entry: (entry - entry.shift(window)).shift(1))
+        # Rate of Change (ROC) - Shifted to use previous window.
+        data[f"roc_{window}"] = grouped['c'].transform(lambda entry: ((entry - entry.shift(window)) / entry.shift(window)).shift(1))
         # Volatility (Standard Deviation of Returns).
         data[f"volatility_{window}"] = returns.rolling(window).std()
-        # Rolling Maximum, Minimum, Range.
-        data[f"rolling_max_close_{window}"] = grouped['c'].transform(lambda entry: entry.rolling(window).max())
-        data[f"rolling_min_close_{window}"] = grouped['c'].transform(lambda entry: entry.rolling(window).min())
+        # Rolling Maximum, Minimum, Range - Shifted to avoid including today's high/low.
+        data[f"rolling_max_close_{window}"] = grouped['c'].transform(lambda entry: entry.rolling(window).max().shift(1))
+        data[f"rolling_min_close_{window}"] = grouped['c'].transform(lambda entry: entry.rolling(window).min().shift(1))
         data[f"rolling_range_{window}"] = data[f"rolling_max_close_{window}"] - data[f"rolling_min_close_{window}"]
         rolling_mean = returns.rolling(window).mean()
         rolling_std = returns.rolling(window).std()
@@ -139,14 +138,19 @@ def add_candlestick_features(data):
     msg_info("Feature: Adding candlestick features (body, shadows, relative body).")
     # Track existing columns before adding new ones.
     original_columns = set(data.columns)
+    # Shifting: We calculate these based on the previous day's OHLC to prevent look-ahead bias.
+    prev_c = data.groupby('T')['c'].shift(1)
+    prev_o = data.groupby('T')['o'].shift(1)
+    prev_h = data.groupby('T')['h'].shift(1)
+    prev_l = data.groupby('T')['l'].shift(1)
     # Compute candle body size.
-    data["candle_body"] = (data["c"] - data["o"]).abs()
+    data["candle_body"] = (prev_c - prev_o).abs()
     # Compute upper shadow.
-    data["upper_shadow"] = data["h"] - data[["c","o"]].max(axis=1)
+    data["upper_shadow"] = prev_h - concat([prev_c, prev_o], axis=1).max(axis=1)
     # Compute lower shadow.
-    data["lower_shadow"] = data[["c","o"]].min(axis=1) - data["l"]
+    data["lower_shadow"] = concat([prev_c, prev_o], axis=1).min(axis=1) - prev_l
     # Compute relative body size.
-    data["relative_body"] = data["candle_body"] / (data["h"] - data["l"])
+    data["relative_body"] = data["candle_body"] / (prev_h - prev_l)
     # Identify new columns created in this function.
     new_columns = set(data.columns) - original_columns
     # Convert only new numeric columns to float32.
@@ -159,12 +163,18 @@ def add_interaction_features(data):
     msg_info("Feature: Adding interaction features (price-volume, return-volume, spread-volume).")
     # Track existing columns before adding new ones.
     original_columns = set(data.columns)
-    # Compute price × volume interaction.
-    data["close_volume"] = data["c"] * data["v"]
-    # Compute return × volume interaction.
-    data["return_volume"] = ((data["c"] - data["o"]) / data["o"]) * data["v"]
-    # Compute spread × volume interaction.
-    data["spread_volume"] = (data["h"] - data["l"]) * data["v"]
+    # Using previous day's data to prevent lookahead issues.
+    prev_c = data.groupby('T')['c'].shift(1)
+    prev_o = data.groupby('T')['o'].shift(1)
+    prev_v = data.groupby('T')['v'].shift(1)
+    prev_h = data.groupby('T')['h'].shift(1)
+    prev_l = data.groupby('T')['l'].shift(1)
+    # Compute price * volume interaction.
+    data["close_volume"] = prev_c * prev_v
+    # Compute return * volume interaction.
+    data["return_volume"] = ((prev_c - prev_o) / prev_o) * prev_v
+    # Compute spread * volume interaction.
+    data["spread_volume"] = (prev_h - prev_l) * prev_v
     # Identify new columns created in this function.
     new_columns = set(data.columns) - original_columns
     # Convert only new numeric columns to float32.
@@ -221,5 +231,9 @@ def main(data):
     data = add_interaction_features(data=data)
     # Add calendar features.
     data = add_calendar_features(data=data)
+    # Remove NaN rows.
+    data = data.dropna()
+    # Ensure the data is still sorted correctly after dropping rows
+    data = data.sort_values(by=['T', 't']).reset_index(drop = True)
     # Return the modified $data.
     return data
