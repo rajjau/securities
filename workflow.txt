@@ -44,7 +44,15 @@
 		E. Dataset Transformation: After the best features are identified, the script applies those selections to both the training and testing datasets. This ensures that the final output only contains the high-value columns, reducing the complexity and improving the speed of the machine learning model.
 		F. Final Output: The script returns the streamlined training features, testing features, and a list of the names of the columns that were kept.
 	7. For each machine‑learning algorithm listed in the configuration, and for each random seed, train the model using the specified settings (cross‑validation, hyperparameter optimization, etc.).
-		A. Collect test accuracy, cross‑validation score, and cross‑validation standard deviation for every model and every seed.
+		A. [OPTIONAL] Hyperparameter Optimization: Performs an initial tuning on the training set using RandomizedSearchCV and TimeSeriesSplit to find stable parameters for chronological data.
+		B/1. Incremental Backtesting (Rolling Prediction): Instead of a static test, the script simulates real-world deployment using the $retrain_step_frequency variable:
+			i. Simulation Loop: Predicts a "chunk" of future data (e.g., 5 days).
+			ii. Continuous Learning: Incorporates those N days of actual results back into the training history and re-fits the model.
+			iii. Concept Drift Adaptation: Repeating this across the whole test set ensures the model updates its knowledge as market regimes change.
+		B/2. Production-Ready Training (Holdout = 0): If no test period is specified, the script skips the rolling loop and trains the optimized model on 100% of the available data.
+		C. Scoring: Captures the Rolling F1-Score (or None for production runs), Cross-Validation mean, and standard deviation for every model/seed.
+		D. Threshold Validation: If the Rolling F1-Score exceeds the save_threshold, the model is dumped to a .joblib file.
+			NOTE: If in "Full Fit" mode (score is None), the model is saved automatically for live deployment.
 	8. Display and/or save results for each model separately. If there are multiple learners in the above step, this step occurs after a given learner has finished training for every random seed.
 		A. Data Aggregation and Normalization
 			i. DataFrame Conversion: The script gathers lists of random seeds, test scores, cross-validation (CV) scores, and CV standard deviations.
