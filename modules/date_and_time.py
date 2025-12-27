@@ -1,6 +1,5 @@
 #!/usr/bin/env python
-from datetime import datetime,timedelta
-from time import mktime
+from datetime import datetime, timedelta
 
 ############
 ### MAIN ###

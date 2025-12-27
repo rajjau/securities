@@ -11,4 +11,4 @@ def main(lst):
     # Remove empty entries.
     lst = [name for name in lst if name]
     # Return the Python list.
-    return(lst)
+    return lst

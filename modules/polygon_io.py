@@ -25,7 +25,7 @@ def define_url(date):
     # Replace the starting and ending dates with their corresponding variables from the $dates tuple.
     url_ = URL.replace('DATE', date)
     # Return the modified $url that's ready to be used.
-    return(url_)
+    return url_
 
 def download(url, filename, stdout_symbol_date):
     try:
@@ -35,11 +35,11 @@ def download(url, filename, stdout_symbol_date):
         # Display a warning message to stdout.
         msg_warn(f"HTTP Error for {stdout_symbol_date}. Reasons include API limit(s) or closed markets.")
         # Return bool False.
-        return(False)
+        return False
     # Display an informational message to stdout.
     msg_info(f"Successfully downloaded the data for {stdout_symbol_date}.")
     # Return bool True.
-    return(True)
+    return True
 
 ############
 ### MAIN ###
@@ -69,4 +69,4 @@ def main(dir_data, dates):
             # If there is more than one date in the $dates tuple, wait the specified time to avoid API flood errors.
             if len(dates) > 1: sleep(15)
     # Return the list of filenames that contain newly downloaded data.
-    return(filenames_output)
+    return filenames_output
