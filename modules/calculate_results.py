@@ -60,7 +60,7 @@ def calculate_average_scores(df_scores):
 ############
 ### MAIN ###
 ############
-def main(learner, random_seeds, total_score, total_cv_score, total_cv_std, save_results_to_file, output_filename):
+def main(learner, total_score, total_cv_score, total_cv_std, random_seeds, save_results_to_file, output_filename):
     # Check if the total score list is empty.
     if all(total_score) is False:
         # Display warning message to user.

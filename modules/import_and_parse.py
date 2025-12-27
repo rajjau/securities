@@ -39,18 +39,18 @@ def main(filename, symbols, cache_directory, columns_x):
     is_dir(cache_directory, exit_on_error=False)
     # Create the cache directory (if needed).
     cache_directory.mkdir(parents=True, exist_ok=True)
-    # Define a pickle filename based on the provided $filename.
+    # Define a joblib filename based on the provided $filename and $symbols.
     filename_joblib = Path(cache_directory, f"{filename.stem}_{'_'.join(symbols) if symbols else 'all'}.joblib")
-    # Check if the pickle file exists.
+    # Check if the joblib file exists.
     if filename_joblib.is_file():
-        # Display message to stdout that the data will be read from the joblib file.
+        # Display a message to stdout that the data will be read from the joblib file.
         msg_info(f"Reading data from previously saved joblib file: {filename_joblib}")
         # Read the data from the joblib file.
         data = load(filename_joblib)
     else:
-        # Import the data from the CSV file and process it. This includes filtering by symbol(s) and saving to a joblib file for caching.
+        # Import the data from the CSV file and process it. This includes filtering by $symbols and saving to a joblib file for caching.
         data = process_data(filename=filename, symbols=symbols, filename_joblib=filename_joblib)
-    # Modify the the feature (X) column to include the new 'lagged_' column names.
+    # Modify the feature (X) columns to include the new 'lagged_' column names found in the $data.
     columns_x = columns_x + [entry for entry in data.columns if entry.startswith('lagged_')]
-    # Return the processed data and the feature (X) columns.
+    # Return the processed $data and the updated $columns_x.
     return data, columns_x

@@ -83,23 +83,23 @@ def apply_normalize(X, columns_x, normalize_method, scaler = None):
 ############
 ### MAIN ###
 def main(data, columns_x, columns_y, columns_one_hot_encoding, holdout_days, normalize_X, normalize_method):
-    # Ensure the $data is sorted from past to present.
+    # Ensure the $data is sorted from past to present based on the time column.
     data = data.sort_values(by = 't', ascending = True)
-    # Define the last X days as a holdout. This will split the data into training and test datasets.
+    # Define the last $holdout_days as a holdout split. This will divide the data into training and test datasets.
     data_train, data_test = holdout(data, days=holdout_days)
-    # Split the training datasets into feature and label columns. Obtain the fitted scaler from the training set to use for the testing set below.
+    # Split the training datasets into feature and label columns using $columns_x and $columns_y.
     X_train, y_train = split_X_y(data=data_train, columns_x=columns_x, columns_y=columns_y)
-    # Perform one-hot-encoding on the training set.
+    # Perform one-hot-encoding on the training features based on the $columns_one_hot_encoding list.
     X_train, columns_x_ohe = one_hot_encode_data(data=X_train, columns_x=columns_x, columns_one_hot_encoding=columns_one_hot_encoding)
     # Split the test datasets into feature and label columns.
     X_test, y_test = split_X_y(data=data_test, columns_x=columns_x, columns_y=columns_y)
-    # Check if the test sets have been defined. If $holdout_days is 0 then these variables will be Nonetype.
+    # Check if the test sets have been defined. If $holdout_days is 0 then these variables will be None.
     if (X_test is not None) and (y_test is not None):
-        # Perform one-hot-encoding on the testing set. We don't need the columns X since it's already been defined when calling this function for the training set above.
+        # Perform one-hot-encoding on the testing features.
         X_test, _ = one_hot_encode_data(data=X_test, columns_x=columns_x, columns_one_hot_encoding=columns_one_hot_encoding)
-        # Reindex the testing features to match the training features. This ensures column alignment and handles categorical differences between sets.
+        # Reindex the testing features to match the training features to ensure column alignment.
         X_test = X_test.reindex(columns=X_train.columns, fill_value=0)
-        # Check if any NaNs exist in the testing set after reindexing.
+        # Check if any NaNs exist in the testing set after the reindexing process.
         if X_test.isnull().values.any():
             # Identify the boolean mask of rows that do not contain any NaNs.
             mask = X_test.notnull().all(axis=1)
@@ -107,11 +107,11 @@ def main(data, columns_x, columns_y, columns_one_hot_encoding, holdout_days, nor
             X_test = X_test[mask]
             # Align the testing labels to match the rows kept in the testing features.
             y_test = y_test[mask.values]
-    # Check if the variable to standardize the data was set to bool True.
+    # Check if the $normalize_X toggle is set to True.
     if normalize_X is True:
-        # If so, then normalize the training set and return the fitted scaler.
+        # If so, then normalize the training set and obtain the fitted scaler.
         X_train, scaler = apply_normalize(X=X_train, columns_x=columns_x_ohe, normalize_method=normalize_method, scaler=None)
-        # Use the fitted scaler from the training set to normalize the testing set.
+        # Use the fitted scaler from the training set to normalize the testing features.
         X_test, _ = apply_normalize(X=X_test, columns_x=columns_x_ohe, normalize_method=normalize_method, scaler=scaler)
-    # Return the training and testing data as well as the one-hot-encoded columns.
+    # Return the training and testing features, labels, and the updated $columns_x_ohe list.
     return X_train, X_test, y_train, y_test, columns_x_ohe
