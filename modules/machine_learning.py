@@ -129,6 +129,7 @@ def set_universal_params(model, random_state):
         model.set_params(random_state = random_state)
     except ValueError:
         pass
+    # Return the $model.
     return model
 
 def hyperparameter_optimization(X_train, y_train, name, cross_validation_folds, random_state):
@@ -211,6 +212,7 @@ def train_predict_rolling(model, X_train, y_train, X_test, y_test, retrain_step_
     return score
 
 def saved_model_filename(name, symbols, random_state):
+    """Define the output filename for saving the trained model to."""
     # Define today's date and time, replacing all spaces with underscores and removing colons in the time.
     timestamp = date_and_time(n_days_ago = 1, include_time = True).replace(' ', '_').replace(':', '')
     # Replace all spaces with underscores.
@@ -230,6 +232,7 @@ def saved_model_filename(name, symbols, random_state):
     return saved_model
 
 def save(saved_model, model, score, save_threshold):
+    """Save the model if its score on the test set was greater than or equal to the save_threshold. If the model was trained on the entire training set then save the model is the save_threshold was set to any number."""
     # Check if the saving of models is disabled.
     if save_threshold == -1: return None
     # If the $accuracy is greater than or equal to the set threshold, save the model to an output file in the current working directory. If the $score is Nonetype, then the the model is ready for production so go ahead as well.
