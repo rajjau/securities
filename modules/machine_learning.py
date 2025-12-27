@@ -233,7 +233,7 @@ def save(saved_model, model, score, save_threshold):
     # Check if the saving of models is disabled.
     if save_threshold == -1: return None
     # If the $accuracy is greater than or equal to the set threshold, save the model to an output file in the current working directory. If the $score is Nonetype, then the the model is ready for production so go ahead as well.
-    if (score >= save_threshold) or (score is None):
+    if (score is None) or (score >= save_threshold):
         # Save the model.
         dump(model, filename = saved_model)
         # Display a message to stdout.
