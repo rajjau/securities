@@ -2,6 +2,7 @@
 from joblib import dump
 from numpy import arange, inf
 from pathlib import Path
+from pandas import concat, Series
 from scipy.linalg import LinAlgWarning
 from sklearn.exceptions import FitFailedWarning
 from sklearn.metrics import f1_score
@@ -115,7 +116,6 @@ learners_hyperparameters['SVC'] = {
     'degree': arange(1, 10, 1),
     'gamma': ['scale', 'auto'],
     'kernel': ['linear', 'poly', 'rbf', 'sigmoid'],
-    'probability': [True],
     'shrinking': [True, False],
     'tol': [0.1, 0.01, 0.001, 0.0001, 0.00001]
 }
@@ -178,12 +178,36 @@ def cross_validation(model, X, y, cross_validation_folds):
     # Return the cross-validation mean score and standard deviation.
     return score_cv.mean(), score_cv.std()
 
-def predict(model, X_test, y_test):
-    # Make predictions on the test set.
-    y_pred = model.predict(X_test)
-    # Calculate the performance of the model.
-    score = f1_score(y_true=y_test, y_pred=y_pred, average='macro')
-    # Return the score.
+def train_predict_rolling(model, X_train, y_train, X_test, y_test, retrain_step_frequency):
+    # Initialize a list to collect predictions from each rolling step.
+    y_preds = []
+    # Ensure the y train and test are Series type.
+    y_train, y_test = Series(y_train), Series(y_test)
+    # Combine training and testing features into a single dataframe for efficient indexing.
+    X_full = concat([X_train, X_test], axis = 0)
+    # Combine training and testing labels into a single series for efficient indexing.
+    y_full = concat([y_train, y_test], axis = 0)
+    # Identify the starting point for the rolling window based on the original training set size.
+    initial_train_len = len(X_train)
+    # Determine the total length of the combined dataset.
+    total_len = len(X_full)
+    # Iterate through the test data using the defined frequency to simulate periodic re-training.
+    for i in range(initial_train_len, total_len, retrain_step_frequency):
+        # Slice the features from the beginning of time up to the current index for training.
+        X_curr_train = X_full.iloc[:i]
+        # Slice the labels from the beginning of time up to the current index for training.
+        y_curr_train = y_full.iloc[:i]
+        # Calculate the end index for the prediction chunk, ensuring it does not exceed the data bounds.
+        end_idx = min(i + retrain_step_frequency, total_len)
+        # Define the feature chunk that the model will predict in this iteration.
+        X_chunk = X_full.iloc[i:end_idx]
+        # Fit the model using the current accumulated historical data.
+        model.fit(X_curr_train, y_curr_train)
+        # Execute predictions on the current chunk and extend the results to the master list.
+        y_preds.extend(model.predict(X_chunk))
+    # Calculate the score by comparing the rolling predictions against the true test labels.
+    score = f1_score(y_true = y_test, y_pred = y_preds, average = 'macro')
+    # Return the $score.
     return score
 
 def saved_model_filename(name, symbols, random_state):
@@ -208,8 +232,8 @@ def saved_model_filename(name, symbols, random_state):
 def save(saved_model, model, score, save_threshold):
     # Check if the saving of models is disabled.
     if save_threshold == -1: return None
-    # If the $accuracy is greater than or equal to the set threshold, save the model to an output file in the current working directory.
-    if score >= save_threshold:
+    # If the $accuracy is greater than or equal to the set threshold, save the model to an output file in the current working directory. If the $score is Nonetype, then the the model is ready for production so go ahead as well.
+    if (score >= save_threshold) or (score is None):
         # Save the model.
         dump(model, filename = saved_model)
         # Display a message to stdout.
@@ -218,10 +242,10 @@ def save(saved_model, model, score, save_threshold):
 ############
 ### MAIN ###
 ############
-def main(X_train, X_test, y_train, y_test, name, symbols, perform_cross_validation, cross_validation_folds, perform_hyperparameter_optimization, random_state, save_threshold):
-    # Check if the variable that controls hyperparameter optimization is enabled.
+def main(X_train, X_test, y_train, y_test, name, symbols, perform_cross_validation, cross_validation_folds, perform_hyperparameter_optimization, random_state, save_threshold, retrain_step_frequency):
+    # Check if hyperparameter optimization is enabled in the configuration.
     if perform_hyperparameter_optimization is True:
-        # If so, then use GridSearchCV to obtain the model with the best performing hyperparameters.
+        # Perform optimization to find the best model parameters using the initial training set.
         model = hyperparameter_optimization(X_train=X_train,
                                             y_train=y_train,
                                             name=name,
@@ -229,27 +253,39 @@ def main(X_train, X_test, y_train, y_test, name, symbols, perform_cross_validati
                                             random_state=random_state
                                             )
     else:
-        # Otherwise, define the current model using the $name.
+        # Otherwise, retrieve the default model settings for the specified learner.
         model = learners[name]
-    # Set universal parameters.
+    # Apply the current random seed and other universal settings to the model.
     model = set_universal_params(model=model, random_state=random_state)
-    # Set the cross-validated score and corresponding standard deviation to None by default. These variables are only useful if the variable to perform cross-validation is set to bool True.
+    # Initialize cross-validation scores to None to handle cases where validation is skipped.
     score_cv = None
+    # Initialize cross-validation standard deviation to None.
     score_cv_stddev = None
-    # If the parameter to perform cross-validaton is set to bool True, then do so.
-    if perform_cross_validation is True: score_cv, score_cv_stddev = cross_validation(model=model, X=X_train, y=y_train, cross_validation_folds=cross_validation_folds)
-    # Fit the $model to the training data.
-    model.fit(X_train, y_train)
-    # Check if the test set has been defined.
+    # If enabled, execute time-series cross-validation on the training data to measure historical stability.
+    if perform_cross_validation is True:
+        score_cv, score_cv_stddev = cross_validation(model=model,
+                                                     X=X_train,
+                                                     y=y_train,
+                                                     cross_validation_folds=cross_validation_folds
+                                                     )
+    # Ensure both features and labels exist for the test set before proceeding to prediction.
     if (X_test is not None) and (y_test is not None):
-        # Calculate the accuracy of the trained $model on the test dataset.
-        score = predict(model=model, X_test=X_test, y_test=y_test)
-        # Define the name of the file to save the model to, if applicable.
-        saved_model = saved_model_filename(name=name, symbols=symbols, random_state=random_state)
-        # If the $score is greater than or equal to the set threshold, save the model to an output file in the current working directory.
-        save(saved_model=saved_model, model=model, score=score, save_threshold=save_threshold)
+        # Calculate the rolling performance score by incrementally updating the model across the test period.
+        score = train_predict_rolling(model=model,
+                                      X_train=X_train,
+                                      y_train=y_train,
+                                      X_test=X_test,
+                                      y_test=y_test,
+                                      retrain_step_frequency=retrain_step_frequency
+                                      )
     else:
-        # If not, then set the performance score to Nonetype.
+        # Train the model on the entire training set.
+        model.fit(X_train, y_train)
+        # Set the score to None if no test data was provided for evaluation.
         score = None
-    # Return the model and its scores for the current seed.
+    # Generate a unique filename for the model based on its name, symbols, and seed.
+    saved_model = saved_model_filename(name=name, symbols=symbols, random_state=random_state)
+    # Save the model to disk if its rolling performance score meets or exceeds the required threshold.
+    save(saved_model=saved_model, model=model, score=score, save_threshold=save_threshold)
+    # Return the final rolling score, the cross-validation mean, and the cross-validation standard deviation.
     return score, score_cv, score_cv_stddev
