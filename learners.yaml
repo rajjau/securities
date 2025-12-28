@@ -61,7 +61,7 @@ LEARNERS:
     class: sklearn.linear_model.RidgeClassifierCV
     params: {}
     optimization:
-      alphas: [0.01, 0.1, 0.5, 1.0] # Truncated for readability; add specific values as needed
+      alphas: [0.01, 0.1, 0.5, 1.0]
       class_weight: [balanced, null]
       scoring: [f1_macro]
 
