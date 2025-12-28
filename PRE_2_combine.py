@@ -14,13 +14,13 @@ from modules.messages import msg_info
 def args():
     """Parse and return command-line arguments."""
     # Create an ArgumentParser object.
-    parser = ArgumentParser(description='Add features to financial data.')
+    parser = ArgumentParser(description='Combine all JSON files into a single CSV.')
     # Add arguments.
     parser.add_argument('directory', type=Path, help='Path to the directory containing all saved JSON data.')
     parser.add_argument('filename_output', type=Path, help='Output CSV filename for the combined data.')
     # Parse the arguments.
     args = parser.parse_args()
-    # Return the filename and symbols.
+    # Return the arguments.
     return args.directory.absolute(), args.filename_output.absolute()
 
 ############
