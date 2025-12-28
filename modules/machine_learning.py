@@ -1,9 +1,8 @@
 #!/usr/bin/env python
-from joblib import dump
 from importlib import import_module
 from numpy import inf
 from pathlib import Path
-from pandas import concat, Series
+from pandas import concat
 from sklearn.metrics import f1_score
 from sklearn.model_selection import cross_val_score, RandomizedSearchCV, TimeSeriesSplit
 from yaml import safe_load
@@ -100,7 +99,15 @@ def hyperparameter_optimization(X_train, y_train, name, cross_validation_folds, 
     # Set universal parameters.
     model = set_universal_params(model=model, random_state=random_state)
     # Define the RandomizedSearchCV object using the TimeSeriesSplit object.
-    search = RandomizedSearchCV(cv = timeseries_k_fold, estimator = model, n_jobs = -1, param_distributions = params, random_state = random_state, scoring = 'f1_macro', n_iter = 10)
+    search = RandomizedSearchCV(
+        cv = timeseries_k_fold,
+        estimator = model,
+        n_iter = 10,
+        n_jobs = -1,
+        param_distributions = params,
+        random_state = random_state,
+        scoring = 'f1_macro'
+    )
     # Fit the model to the training data.
     search.fit(X_train, y_train)
     # Identify the model with the best performance.
@@ -116,38 +123,46 @@ def cross_validation(model, X, y, cross_validation_folds):
     return score_cv.mean(), score_cv.std()
 
 def train_predict_rolling(model, X_train, y_train, X_test, y_test, retrain_step_frequency, sliding_window_size):
-    # Initialize a list to collect predictions from each rolling step.
+    # Initialize a list to store model predictions for each step.
     y_preds = []
-    # Ensure the y train and test are Series type.
-    y_train, y_test = Series(y_train), Series(y_test)
-    # Combine training and testing features/labels into single objects for efficient slicing.
-    X_full = concat([X_train, X_test], axis = 0)
-    y_full = concat([y_train, y_test], axis = 0)
-    # Identify the starting point and total length for the walk-forward simulation.
-    initial_train_len = len(X_train)
-    # Calculate the total number of rows in the full dataset.
-    total_len = len(X_full)
-    # Iterate through the test data using the defined frequency to simulate periodic re-training.
-    for i in range(initial_train_len, total_len, retrain_step_frequency):
-        # If a sliding window has been defined, then use that chunk of history rather than all history. This helps with memory and also ensures that data from 2023 isn't treated the same as data from 2026 for example. We keep looking at the most recent N chunks of data.
+    # Total length of the training set.
+    train_len = len(X_train)
+    # Total length of the test set.
+    test_len = len(X_test)
+    # Loop through the test data using the retraining frequency as the step size.
+    for i in range(0, test_len, retrain_step_frequency):
+        # Calculate the absolute position in the sequence (train + current test offset).
+        current_cutoff = train_len + i
+        # Check if the sliding window was specified.
         if sliding_window_size > 0:
-            start_idx = max(0, i - sliding_window_size)
+            # If so, then calculate the start of the window, ensuring it doesn't go below index 0.
+            start_idx = max(0, current_cutoff - sliding_window_size)
         else:
-            # If set to 0 then use all history.
+            # Use the entire training set.
             start_idx = 0
-        # Slice historical data from the beginning of the dataset up to the current index (Expanding Window).
-        X_curr_train = X_full.iloc[start_idx:i]
-        y_curr_train = y_full.iloc[start_idx:i]
-        # Calculate the end index for the prediction chunk.
-        end_idx = min(i + retrain_step_frequency, total_len)
-        # Define the chunk that the model will predict.
-        X_chunk = X_full.iloc[i:end_idx]
-        # Re-fit the model on the updated historical dataset.
+        # Determine if the training window spans across both the train and test sets.
+        if start_idx < train_len:
+            # Create the current window training set by joining the end of X_train with the current X_test progress
+            X_curr_train = concat([X_train.iloc[start_idx:], X_test.iloc[:i]])
+            # Create the corresponding label set.
+            y_curr_train = concat([y_train.iloc[start_idx:], y_test.iloc[:i]])
+        else:
+            # If the window has moved past the training set, use from the testing set.
+            X_curr_train = X_test.iloc[start_idx - train_len:i]
+            # Create the corresponding label by taking from the test label set. 
+            y_curr_train = y_test.iloc[start_idx - train_len:i]
+        # Calculate the end index for the current window.
+        end_idx = min(i + retrain_step_frequency, test_len)
+        # Create the test set for the current window.
+        X_curr_test = X_test.iloc[i:end_idx]
+        # Train the model.
         model.fit(X_curr_train, y_curr_train)
-        # Predict the next chunk and append results.
-        y_preds.extend(model.predict(X_chunk))
-    # Calculate the F1 Macro score comparing rolling predictions against true test labels.
-    score = f1_score(y_true = y_test, y_pred = y_preds, average = 'macro')
+        # Calculate predictions and append them to the results list.
+        y_preds.extend(model.predict(X_curr_test))
+    # Align the true labels with the total number of predictions made.
+    y_true = y_test.iloc[:len(y_preds)]
+    # Compute the score.
+    score = f1_score(y_true = y_true, y_pred = y_preds, average = 'macro')
     # Return the $score.
     return score
 
@@ -175,17 +190,19 @@ def save(saved_model, model, score, save_threshold):
 ############
 ### MAIN ###
 ############
-def main(X_train, y_train, X_test, y_test, name, learners_yaml, symbols, random_state, perform_hyperparameter_optimization, perform_cross_validation, cross_validation_folds, retrain_step_frequency, sliding_window_size, save_threshold):
+def main(X_train, y_train, X_test, y_test, name, learners_yaml, symbols, random_state, configuration_ini):
+    # Obtain number of cross-validation folds from configuration file.
+    cross_validation_folds = configuration_ini.getint('ML', 'CROSS_VALIDATION_FOLDS')
     # Load configuration to populate global dictionaries.
     load_learners(learners_yaml=learners_yaml)
     # Execute hyperparameter optimization (HPO) only on the training set to prevent leakage from the test set.
-    if perform_hyperparameter_optimization is True:
+    if configuration_ini.getboolean('GENERAL', 'PERFORM_HYPERPARAMETER_OPTIMIZATION') is True:
         # Perform hyperparameter optimization.
         model = hyperparameter_optimization(
             X_train=X_train,
             y_train=y_train,
             name=name,
-            cross_validation_folds=cross_validation_folds,
+            cross_validation_folds=configuration_ini.getint('ML', 'CROSS_VALIDATION_FOLDS'),
             random_state=random_state
         )
     else:
@@ -196,7 +213,7 @@ def main(X_train, y_train, X_test, y_test, name, learners_yaml, symbols, random_
     # Set the cross-validation and cross-validation standard deviation (stddev) as Nonetype.
     score_cv, score_cv_stddev = (None, None)
     # Check if the option to perform cross-validation was enabled.
-    if perform_cross_validation is True:
+    if configuration_ini.getboolean('GENERAL', 'PERFORM_CROSS_VALIDATION') is True:
         # Perform cross-validation and return its score and stddev.
         score_cv, score_cv_stddev = cross_validation(model=model, X=X_train, y=y_train, cross_validation_folds=cross_validation_folds)
     # Check if the test set has been defined.
@@ -208,8 +225,8 @@ def main(X_train, y_train, X_test, y_test, name, learners_yaml, symbols, random_
             y_train=y_train,
             X_test=X_test,
             y_test=y_test,
-            retrain_step_frequency=retrain_step_frequency,
-            sliding_window_size=sliding_window_size
+            retrain_step_frequency=configuration_ini.getint('ML', 'RETRAIN_STEP_FREQUENCY'),
+            sliding_window_size=configuration_ini.getint('ML', 'SLIDING_WINDOW_SIZE')
         )
     else:
         # Otherwise, fit the model on the full training set for production use.
@@ -219,6 +236,6 @@ def main(X_train, y_train, X_test, y_test, name, learners_yaml, symbols, random_
     # Generate the filename for saving the model to an output file.
     saved_model = saved_model_filename(name=name, symbols=symbols, random_state=random_state)
     # Save the model if performance requirements are met.
-    save(saved_model=saved_model, model=model, score=score, save_threshold=save_threshold)
+    save(saved_model=saved_model, model=model, score=score, save_threshold=configuration_ini.getfloat('ML', 'SAVE_THRESHOLD'))
     # Return the scores.
     return score, score_cv, score_cv_stddev
