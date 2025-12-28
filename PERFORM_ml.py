@@ -166,12 +166,7 @@ def main(filename):
                 learners_yaml=LEARNERS_YAML,
                 symbols=symbols,
                 random_state=seed,
-                perform_hyperparameter_optimization=configuration_ini.getboolean('GENERAL', 'PERFORM_HYPERPARAMETER_OPTIMIZATION'),
-                perform_cross_validation=configuration_ini.getboolean('GENERAL', 'PERFORM_CROSS_VALIDATION'),
-                cross_validation_folds=configuration_ini.getint('ML', 'CROSS_VALIDATION_FOLDS'),
-                retrain_step_frequency=configuration_ini.getint('ML', 'RETRAIN_STEP_FREQUENCY'),
-                sliding_window_size=configuration_ini.getint('ML', 'SLIDING_WINDOW_SIZE'),
-                save_threshold=configuration_ini.getfloat('ML', 'SAVE_THRESHOLD')
+                configuration_ini=configuration_ini
             )
             # Add the score for the current $learner for the current $seed.
             total_score.append(score_seed)
