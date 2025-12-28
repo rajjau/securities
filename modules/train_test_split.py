@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from numpy import ravel,unique
+from numpy import unique
 from pandas import DataFrame
 from sklearn.preprocessing import RobustScaler, StandardScaler, MinMaxScaler
 
@@ -41,8 +41,8 @@ def split_X_y(data, columns_x, columns_y):
     if data is None: return None, None
     # Define the feature columns as a DataFrame.
     X = data[columns_x]
-    # Define the label column(s), and use the `ravel` command to ensure there are no warnings during training later on.
-    y = ravel(data[columns_y])
+    # Define the label column(s).
+    y = data[columns_y]
     # Return the feature and label columns for the $data.
     return X, y
 
