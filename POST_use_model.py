@@ -25,7 +25,7 @@ def args():
         # If argument 1 was not specified, then raise an error.
         raise IndexError('Argument 1: Path to the saved model. It should be a joblib file.')
     # Return the user-defined variable(s).
-    return(filename_model)
+    return filename_model
 
 ############
 ### MAIN ###
