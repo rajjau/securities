@@ -45,11 +45,8 @@ def time(data):
     # Convert the column containing Unix millisecond timestamps into Pandas datetime format.
     timestamps = to_datetime(data['t'], unit='ms')
     # Create new columns:
-    # 't_d': Full date (YYYY-MM-DD).
-    # 'day_of_week': Day of the week name.
-    # 'lagged_day_of_week': Previous day of the week name.
     new_cols = {
-        't_d': timestamps.dt.normalize(),  # faster than dt.date
+        't_d': timestamps.dt.normalize(),
         'day_of_week': timestamps.dt.day_name(),
         'lagged_day_of_week': (timestamps - Timedelta(days=1)).dt.day_name()
     }
@@ -60,36 +57,57 @@ def time(data):
     # Return the $data.
     return data
 
-def add_lagged_features(data):
+def add_overnight_features(data):
     # Display informational message to stdout.
-    msg_info("Feature: Adding lagged columns and derived lagged features.")
+    msg_info('Feature: Adding overnight gap and momentum features.')
     # Track existing columns before adding new ones.
     original_columns = set(data.columns)
-    # Sort the DataFrame by symbol and timestamp to ensure correct rolling behavior.
-    data = data.sort_values(by=["T", "t"])
-    # Convert core OHLCV columns to float32 for memory efficiency.
-    for col in ['c', 'h', 'l', 'n', 'o', 'v', 'vw']: data[col] = data[col].astype("float32")
-    # Precompute groupby once for major speed improvement.
-    grouped = data.groupby("T")
-    # Define a dictionary to hold all new lagged and derived columns.
-    new_cols = {}
-    # Generate lagged OHLCV columns and derived features in a single pass.
-    for previous_day in range(1, LAGGED_MAX_DAYS + 1):
-        # Create lagged OHLCV columns.
-        for col in ['c', 'h', 'l', 'n', 'o', 'v', 'vw']: new_cols[f"lagged_{col}_{previous_day}"] = grouped[col].shift(previous_day)
-        # Compute derived lagged features using the newly created lagged columns.
-        lagged_high = grouped['h'].shift(previous_day)
-        lagged_low = grouped['l'].shift(previous_day)
-        lagged_close = grouped['c'].shift(previous_day)
-        lagged_open = grouped['o'].shift(previous_day)
-        new_cols[f"lagged_high_low_spread_{previous_day}"] = lagged_high - lagged_low
-        new_cols[f"lagged_daily_return_{previous_day}"] = (lagged_close - lagged_open) / lagged_open
-    # Add all new columns to the DataFrame.
-    data = concat([data, DataFrame(new_cols)], axis=1)
+    # Sort the DataFrame by symbol and timestamp.
+    data = data.sort_values(by=['T', 't'])
+    # Precompute groupby once for speed.
+    grouped = data.groupby('T')
+    # Calculate the Overnight Gap: (Today's Open - Yesterday's Close) / Yesterday's Close.
+    prev_close = grouped['c'].shift(1)
+    data['overnight_gap'] = (data['o'] - prev_close) / prev_close
+    # Calculate Lagged Gap: The gap value from the previous trading day.
+    data['lagged_overnight_gap_1'] = data['overnight_gap'].shift(1)
+    # Significant Gap Flag: Binary indicator for gaps greater than 0.5%.
+    data['is_significant_gap'] = (data['overnight_gap'].abs() > 0.005).astype(int)
     # Identify new columns created in this function.
     new_columns = set(data.columns) - original_columns
     # Convert only new numeric columns to float32.
     convert_to_float32(data=data, prefix=None, columns=new_columns)
+    # Return the modified $data.
+    return data
+
+def add_lagged_features(data):
+    # Display informational message to stdout.
+    msg_info('Feature: Adding lagged columns and derived lagged features.')
+    # Sort the DataFrame by symbol and timestamp to ensure correct rolling behavior.
+    data = data.sort_values(by=['T', 't'])
+    # Define core columns to lag.
+    core_cols = ['c', 'h', 'l', 'n', 'o', 'v', 'vw']
+    # Precompute groupby once for major speed improvement.
+    grouped = data.groupby('T')
+    # Initialize a list to hold lagged DataFrames for a single concatenation at the end.
+    lag_list = []
+    # Generate lagged OHLCV blocks and derived features.
+    for i in range(1, LAGGED_MAX_DAYS + 1):
+        # Shift the entire block of core columns for the current lag interval.
+        lagged_df = grouped[core_cols].shift(i)
+        # Rename the columns for the current lag interval.
+        lagged_df.columns = [f"lagged_{col}_{i}" for col in core_cols]
+        # Compute derived lagged features using the vectorized block.
+        lagged_df[f"lagged_high_low_spread_{i}"] = lagged_df[f"lagged_h_{i}"] - lagged_df[f"lagged_l_{i}"]
+        lagged_df[f"lagged_daily_return_{i}"] = (lagged_df[f"lagged_c_{i}"] - lagged_df[f"lagged_o_{i}"]) / lagged_df[f"lagged_o_{i}"]
+        # Add the current lag block to the list.
+        lag_list.append(lagged_df)
+    # Concatenate all lagged blocks to the original data in a single operation to save memory and time.
+    data = concat([data] + lag_list, axis=1)
+    # Identify all newly created columns (all columns following the original 'quarter' or last calendar col).
+    new_cols = data.columns.difference(['T', 't', 'c', 'h', 'l', 'n', 'o', 'v', 'vw', 't_d', 'day_of_week', 'lagged_day_of_week', 'overnight_gap', 'lagged_overnight_gap_1', 'is_significant_gap'])
+    # Convert all new numeric columns to float32.
+    convert_to_float32(data=data, prefix=None, columns=new_cols)
     # Create a copy of $data to avoid SettingWithCopyWarning.
     data = data.copy()
     # Return the modified DataFrame.
@@ -97,45 +115,42 @@ def add_lagged_features(data):
 
 def add_technical_indicators(data):
     # Display informational message to stdout.
-    msg_info("Feature: Adding technical indicators (SMA, EMA, momentum, ROC, volatility, rolling stats, z-scores).")
+    msg_info('Feature: Adding technical indicators (SMA/EMA distance, ROC, volatility, normalized range).')
     # Track existing columns before adding new ones.
     original_columns = set(data.columns)
-    # Sort the DataFrame by the symbol name and timestamp. This groups stocks and ensures the data for a given stock is in order from earliest to most recent.
+    # Sort the DataFrame by the symbol name and timestamp.
     data = data.sort_values(by=['T','t'])
     # Precompute groupby once for major speed improvement.
     grouped = data.groupby('T')
-    # Precompute daily returns (SHIFTED to avoid leakage).
+    # Precompute previous close and daily returns (SHIFTED to avoid leakage).
+    prev_c = grouped['c'].shift(1)
     returns = grouped['c'].transform(lambda entry: entry.pct_change().shift(1))
     # Compute all window-based indicators.
     for window in MOVING_AVERAGE_WINDOWS:
-        # Simple Moving Average (SMA) - Shifted to use previous window.
-        data[f"sma_{window}"] = grouped['c'].transform(lambda entry: entry.rolling(window).mean().shift(1))
-        # Exponential Moving Average (EMA) - Shifted to use previous window.
-        data[f"ema_{window}"] = grouped['c'].transform(lambda entry: entry.ewm(span=window,adjust=False).mean().shift(1))
-        # Momentum - Shifted to use previous window.
-        data[f"momentum_{window}"] = grouped['c'].transform(lambda entry: (entry - entry.shift(window)).shift(1))
-        # Rate of Change (ROC) - Shifted to use previous window.
-        data[f"roc_{window}"] = grouped['c'].transform(lambda entry: ((entry - entry.shift(window)) / entry.shift(window)).shift(1))
+        # Simple Moving Average (SMA) Distance - Shifted percentage distance from previous close to the mean.
+        sma_val = grouped['c'].transform(lambda entry: entry.rolling(window).mean().shift(1))
+        data[f"dist_from_sma_{window}"] = (prev_c - sma_val) / sma_val
+        # Exponential Moving Average (EMA) Distance - Shifted percentage distance from previous close to the exponential mean.
+        ema_val = grouped['c'].transform(lambda entry: entry.ewm(span=window, adjust=False).mean().shift(1))
+        data[f"dist_from_ema_{window}"] = (prev_c - ema_val) / ema_val
+        # Rate of Change (ROC) - The percentage change between the previous day and the start of the window.
+        data[f"roc_{window}"] = grouped['c'].transform(lambda entry: ((entry.shift(1) - entry.shift(window+1)) / entry.shift(window+1)))
         # Volatility (Standard Deviation of Returns).
         data[f"volatility_{window}"] = returns.rolling(window).std()
-        # Rolling Maximum, Minimum, Range - Shifted to avoid including today's high/low.
-        data[f"rolling_max_close_{window}"] = grouped['c'].transform(lambda entry: entry.rolling(window).max().shift(1))
-        data[f"rolling_min_close_{window}"] = grouped['c'].transform(lambda entry: entry.rolling(window).min().shift(1))
-        data[f"rolling_range_{window}"] = data[f"rolling_max_close_{window}"] - data[f"rolling_min_close_{window}"]
-        rolling_mean = returns.rolling(window).mean()
-        rolling_std = returns.rolling(window).std()
-        # Z-Score of Returns.
-        data[f"zscore_return_{window}"] = (returns - rolling_mean) / rolling_std
+        # Normalized Rolling Range - High/Low spread over the window normalized by the SMA to ensure stationarity.
+        rolling_max = grouped['c'].transform(lambda entry: entry.rolling(window).max().shift(1))
+        rolling_min = grouped['c'].transform(lambda entry: entry.rolling(window).min().shift(1))
+        data[f"norm_range_{window}"] = (rolling_max - rolling_min) / sma_val
     # Identify new columns created in this function.
     new_columns = set(data.columns) - original_columns
     # Convert only new numeric columns to float32.
     convert_to_float32(data=data, prefix=None, columns=new_columns)
-    # Return modified DataFrame
+    # Return modified $data.
     return data
 
 def add_candlestick_features(data):
     # Display informational message to stdout.
-    msg_info("Feature: Adding candlestick features (body, shadows, relative body).")
+    msg_info('Feature: Adding candlestick features (body, shadows, relative body).')
     # Track existing columns before adding new ones.
     original_columns = set(data.columns)
     # Shifting: We calculate these based on the previous day's OHLC to prevent look-ahead bias.
@@ -144,13 +159,13 @@ def add_candlestick_features(data):
     prev_h = data.groupby('T')['h'].shift(1)
     prev_l = data.groupby('T')['l'].shift(1)
     # Compute candle body size.
-    data["candle_body"] = (prev_c - prev_o).abs()
+    data['candle_body'] = (prev_c - prev_o).abs()
     # Compute upper shadow.
-    data["upper_shadow"] = prev_h - concat([prev_c, prev_o], axis=1).max(axis=1)
+    data['upper_shadow'] = prev_h - concat([prev_c, prev_o], axis=1).max(axis=1)
     # Compute lower shadow.
-    data["lower_shadow"] = concat([prev_c, prev_o], axis=1).min(axis=1) - prev_l
+    data['lower_shadow'] = concat([prev_c, prev_o], axis=1).min(axis=1) - prev_l
     # Compute relative body size.
-    data["relative_body"] = data["candle_body"] / (prev_h - prev_l)
+    data['relative_body'] = data['candle_body'] / (prev_h - prev_l)
     # Identify new columns created in this function.
     new_columns = set(data.columns) - original_columns
     # Convert only new numeric columns to float32.
@@ -160,7 +175,7 @@ def add_candlestick_features(data):
 
 def add_interaction_features(data):
     # Display informational message to stdout.
-    msg_info("Feature: Adding interaction features (price-volume, return-volume, spread-volume).")
+    msg_info('Feature: Adding interaction features (price-volume, return-volume, spread-volume).')
     # Track existing columns before adding new ones.
     original_columns = set(data.columns)
     # Using previous day's data to prevent lookahead issues.
@@ -170,11 +185,11 @@ def add_interaction_features(data):
     prev_h = data.groupby('T')['h'].shift(1)
     prev_l = data.groupby('T')['l'].shift(1)
     # Compute price * volume interaction.
-    data["close_volume"] = prev_c * prev_v
+    data['close_volume'] = prev_c * prev_v
     # Compute return * volume interaction.
-    data["return_volume"] = ((prev_c - prev_o) / prev_o) * prev_v
+    data['return_volume'] = ((prev_c - prev_o) / prev_o) * prev_v
     # Compute spread * volume interaction.
-    data["spread_volume"] = (prev_h - prev_l) * prev_v
+    data['spread_volume'] = (prev_h - prev_l) * prev_v
     # Identify new columns created in this function.
     new_columns = set(data.columns) - original_columns
     # Convert only new numeric columns to float32.
@@ -189,19 +204,16 @@ def add_calendar_features(data):
     original_columns = set(data.columns)
     # Convert timestamps to datetime.
     timestamps = to_datetime(data['t'], unit='ms')
-    # Extract day of month.
+    # Extract month, day, quarter.
     data['day_of_month'] = timestamps.dt.day
-    # Extract month.
     data['month'] = timestamps.dt.month
-    # Extract quarter.
     data['quarter'] = timestamps.dt.quarter
-    # Month-end flag.
     data['is_month_end'] = timestamps.dt.is_month_end.astype(int)
     # Cyclical encoding for day of week (7-day cycle).
     day_of_week = timestamps.dt.dayofweek
     data['dow_sin'] = (2 * pi * day_of_week / 7).map(sin)
     data['dow_cos'] = (2 * pi * day_of_week / 7).map(cos)
-    # Cyclical encoding for day of month (variable-length cycle).
+    # Cyclical encoding for day of month.
     day_of_month = timestamps.dt.day
     days_in_month = timestamps.dt.days_in_month
     data['dom_sin'] = (2 * pi * day_of_month / days_in_month).map(sin)
@@ -217,13 +229,15 @@ def add_calendar_features(data):
 ### MAIN ###
 ############
 def main(data):
-    # Add string labels that describe when the opening value is less, equal, or greater than the closing value. These will be converted to int using one-hot-encoding before machine learning.
+    # Add string labels that describe when the opening value is less, equal, or greater than the closing value.
     data = open_to_close(data=data)
     # Calculate the different aspects of time for each row based on the timestamp ('t') value.
     data = time(data=data)
+    # Add overnight gap features to establish the start-state of the trading day.
+    data = add_overnight_features(data=data)
     # Add features from previous days.
     data = add_lagged_features(data=data)
-    # Add various technical indicators.
+    # Add various technical indicators using stationary (percentage-based) calculations.
     data = add_technical_indicators(data=data)
     # Add candlestick features.
     data = add_candlestick_features(data=data)
@@ -231,9 +245,5 @@ def main(data):
     data = add_interaction_features(data=data)
     # Add calendar features.
     data = add_calendar_features(data=data)
-    # Remove NaN rows.
-    data = data.dropna()
-    # Ensure the data is still sorted correctly after dropping rows
-    data = data.sort_values(by=['T', 't']).reset_index(drop = True)
     # Return the modified $data.
     return data
