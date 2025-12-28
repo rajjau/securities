@@ -27,6 +27,9 @@ CONFIG_INI = Path(ROOT, 'configuration.ini')
 # Path to the YAML file containing all learners.
 LEARNERS_YAML = Path(ROOT, 'learners.yaml')
 
+# Define columns that represent the "future" or "result" of the current bar. Keep 'o' (Open) because it is known at the start of the trade.
+LEAKY_COLUMNS = ['c', 'h', 'l', 'v', 'n', 'vw']
+
 #################
 ### FUNCTIONS ###
 #################
@@ -40,10 +43,6 @@ def args():
     args = parser.parse_args()
     # Return the filename and symbols.
     return args.filename.absolute()
-
-def convert_to_bool(string):
-    """Convert a string representation of a boolean to an actual boolean value."""
-    return bool(int(string))
 
 def convert_to_list(string, delimiter):
     """Split a string representation of a list into an actual list based on the provided $delimiter."""
@@ -91,27 +90,31 @@ def main(filename):
     configuration_ini = ConfigParser()
     # Read the configuration INI file.
     configuration_ini.read(CONFIG_INI)
-    # Define a dictionary to hold all configuration parameters.
-    configuration = {}
-    # Iterate through each section in the configuration INI file and add it to the configuration dictionary.
-    for section in configuration_ini.sections(): configuration[section] = dict(configuration_ini.items(section))
     #------------#
     #--- Data ---#
     #------------#
     # Define the symbols to process.
-    symbols = convert_to_list(string=configuration['DATA']['symbols'], delimiter=',')
+    symbols = convert_to_list(string=configuration_ini['DATA']['SYMBOLS'], delimiter=',')
+    # Define the label column(s) (y).
+    columns_y = convert_to_list(string=configuration_ini['DATA']['COLUMNS_Y'], delimiter=',')
     # Import and preprocess data for ML.
     data, columns_x = import_and_parse(
         filename=filename,
         symbols=symbols,
-        cache_directory=Path(ROOT, configuration['GENERAL']['cache_directory']).absolute(),
-        columns_x=convert_to_list(string=configuration['DATA']['columns_x'], delimiter=',')
+        cache_directory=Path(ROOT, configuration_ini['GENERAL']['CACHE_DIRECTORY']).absolute(),
+        columns_x=convert_to_list(string=configuration_ini['DATA']['COLUMNS_X'], delimiter=','),
+        columns_y=columns_y
     )
-    # Define the label column(s) (y).
-    columns_y = convert_to_list(string=configuration['DATA']['columns_y'], delimiter=',')
     # Calculate the baseline accuracy and display it to stdout.
     calculate_baseline_accuracy(data[columns_y].value_counts())
     # Everything below this point assumes that the data has been successfully imported and preprocessed. The cache is now available for future runs.
+    #----------------#
+    #--- Cleaning ---#
+    #----------------#
+    # Filter columns_x to remove leakage while keeping lagged features and 'o'.
+    columns_x = [col for col in columns_x if col not in LEAKY_COLUMNS]
+    # Message to stdout to confirm cleaning.
+    msg_info(f"Removed leaky features: {LEAKY_COLUMNS}")
     #------------------------#
     #--- Train/Test Split ---#
     #------------------------#
@@ -120,10 +123,10 @@ def main(filename):
         data=data,
         columns_x=columns_x,
         columns_y=columns_y,
-        columns_one_hot_encoding=convert_to_list(string=configuration['DATA']['columns_one_hot_encoding'], delimiter=','),
-        holdout_days=int(configuration['DATA']['holdout_days']),
+        columns_one_hot_encoding=convert_to_list(string=configuration_ini['DATA']['COLUMNS_ONE_HOT_ENCODING'], delimiter=','),
+        holdout_days=configuration_ini.getint('DATA', 'HOLDOUT_DAYS'),
         normalize_X=True,
-        normalize_method=configuration['NORMALIZATION']['normalize_method']
+        normalize_method=configuration_ini['NORMALIZATION']['NORMALIZE_METHOD']
     )
     #-------------------------#
     #--- Feature Selection ---#
@@ -134,15 +137,15 @@ def main(filename):
         y_train=y_train,
         X_test=X_test,
         columns_x=columns_x,
-        perform_feature_selection=convert_to_bool(configuration['GENERAL']['perform_feature_selection'])
+        perform_feature_selection=configuration_ini.getboolean('GENERAL', 'PERFORM_FEATURE_SELECTION')
     )
     #------------------------#
     #--- Machine Learning ---#
     #------------------------#
     # Define the machine learning algorithms to use.
-    use_learners = convert_to_list(string=configuration['ML']['use_learners'], delimiter=',')
+    use_learners = convert_to_list(string=configuration_ini['ML']['USE_LEARNERS'], delimiter=',')
     # Define the random seed(s).
-    random_seeds = [int(item) for item in convert_to_list(string=configuration['GENERAL']['random_seed'], delimiter=',')]
+    random_seeds = [int(item) for item in convert_to_list(string=configuration_ini['GENERAL']['RANDOM_SEED'], delimiter=',')]
     # Iterate through each random seed.
     for learner in use_learners:
         # Create a border to denote a process.
@@ -163,11 +166,12 @@ def main(filename):
                 learners_yaml=LEARNERS_YAML,
                 symbols=symbols,
                 random_state=seed,
-                perform_hyperparameter_optimization=convert_to_bool(configuration['GENERAL']['perform_hyperparameter_optimization']),
-                perform_cross_validation=convert_to_bool(configuration['GENERAL']['perform_cross_validation']),
-                cross_validation_folds=int(configuration['ML']['cross_validation_folds']),
-                retrain_step_frequency=int(configuration['ML']['retrain_step_frequency']),
-                save_threshold=float(configuration['ML']['save_threshold'])
+                perform_hyperparameter_optimization=configuration_ini.getboolean('GENERAL', 'PERFORM_HYPERPARAMETER_OPTIMIZATION'),
+                perform_cross_validation=configuration_ini.getboolean('GENERAL', 'PERFORM_CROSS_VALIDATION'),
+                cross_validation_folds=configuration_ini.getint('ML', 'CROSS_VALIDATION_FOLDS'),
+                retrain_step_frequency=configuration_ini.getint('ML', 'RETRAIN_STEP_FREQUENCY'),
+                sliding_window_size=configuration_ini.getint('ML', 'SLIDING_WINDOW_SIZE'),
+                save_threshold=configuration_ini.getfloat('ML', 'SAVE_THRESHOLD')
             )
             # Add the score for the current $learner for the current $seed.
             total_score.append(score_seed)
@@ -186,7 +190,7 @@ def main(filename):
             total_cv_score=total_cv_score,
             total_cv_std=total_cv_std,
             random_seeds=random_seeds,
-            save_results_to_file=convert_to_bool(configuration['GENERAL']['save_results_to_file']),
+            save_results_to_file=configuration_ini.getboolean('GENERAL', 'SAVE_RESULTS_TO_FILE'),
             output_filename=output_filename
         )
 
