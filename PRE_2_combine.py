@@ -1,8 +1,6 @@
 #!/usr/bin/env python
-from multiprocessing import Pool
-from os import cpu_count
+from argparse import ArgumentParser
 from pathlib import Path
-from sys import argv
 
 ######################
 ### CUSTOM MODULES ###
@@ -14,18 +12,16 @@ from modules.messages import msg_info
 ### FUNCTIONS ###
 #################
 def args():
-    try:
-        # Argument 1: Path to the directory that contains all data.
-        directory = Path(argv[1]).absolute()
-    except IndexError:
-        raise IndexError('Argument 1: Path to the directory containing all saved JSON data.')
-    try:
-        # Argument 2: Output filename.
-        filename_output = Path(argv[2]).absolute()
-    except IndexError:
-        raise IndexError(f"Argument 2: Output CSV filename for the combined data from: '{directory}'")
-    # Return the user-defined variable(s).
-    return(directory, filename_output)
+    """Parse and return command-line arguments."""
+    # Create an ArgumentParser object.
+    parser = ArgumentParser(description='Add features to financial data.')
+    # Add arguments.
+    parser.add_argument('directory', type=Path, help='Path to the directory containing all saved JSON data.')
+    parser.add_argument('filename_output', type=Path, help='Output CSV filename for the combined data.')
+    # Parse the arguments.
+    args = parser.parse_args()
+    # Return the filename and symbols.
+    return args.directory.absolute(), args.filename_output.absolute()
 
 ############
 ### MAIN ###
@@ -34,7 +30,7 @@ def main(dir_data, filename_output):
     # Find all JSON files located within the $dir_data directory.
     filenames = sorted([filename for filename in Path(dir_data).iterdir() if filename.is_file() and filename.suffix == '.json'])
     # Combine the data for all filenames.
-    combine_json(filenames = filenames, filename_output = filename_output)
+    combine_json(filenames=filenames, filename_output=filename_output)
     # Display informational message to stdout.
     msg_info(f"Done. All data has been written to the output file: '{filename_output}'")
 
@@ -42,7 +38,7 @@ def main(dir_data, filename_output):
 ### START ###
 #############
 if __name__ == '__main__':
-    # Obtain user-defined arguments
-    [directory, filename_output] = args()
-    # Start the script
-    Pool(processes = cpu_count() - 1).apply(main, args = (directory, filename_output))
+    # Obtain user-defined arguments.
+    directory, filename_output = args()
+    # Start the script.
+    main(directory=directory, filename_output=filename_output)
