@@ -32,7 +32,7 @@ def process_data(filename, symbols, filename_joblib):
 ############
 ### MAIN ###
 ############
-def main(filename, symbols, cache_directory, columns_x):
+def main(filename, symbols, cache_directory, columns_x, columns_y):
     # Create a border to denote a process.
     border('IMPORT DATA', border_char='><')
     # Verify that the cache directory exists.
@@ -50,7 +50,7 @@ def main(filename, symbols, cache_directory, columns_x):
     else:
         # Import the data from the CSV file and process it. This includes filtering by $symbols and saving to a joblib file for caching.
         data = process_data(filename=filename, symbols=symbols, filename_joblib=filename_joblib)
-    # Modify the feature (X) columns to include the new 'lagged_' column names found in the $data.
-    columns_x = columns_x + [entry for entry in data.columns if entry.startswith('lagged_')]
+    # If a wildcard was passed to define the feature set columns, then use all columns except for $columns_y.
+    if columns_x[0] == '*': columns_x = data.columns.difference(columns_y).to_list()
     # Return the processed $data and the updated $columns_x.
     return data, columns_x
