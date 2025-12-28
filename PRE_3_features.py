@@ -24,7 +24,7 @@ def args():
     parser = ArgumentParser(description='Add features to financial data.')
     # Add arguments.
     parser.add_argument('filename', type=Path, help='CSV containing the combined stock data to add features to.')
-    parser.add_argument('filename_output', type=Path, help='CSV output filename.')
+    parser.add_argument('filename_output', type=Path, help='Parquet output filename.')
     # Parse the arguments.
     args = parser.parse_args()
     # Return the filename and symbols.
@@ -59,7 +59,7 @@ def main(filename, filename_output):
     # Message to stdout.
     msg_info('Saving data with new features to the output file.')
     # Save the $data with new features to the output file.
-    data.to_csv(filename_output, header = True, index = False, quoting = 1)
+    data.to_parquet(path = filename_output, index = False)
 
 #############
 ### START ###
