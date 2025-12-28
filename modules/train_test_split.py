@@ -81,10 +81,6 @@ def apply_normalize(X, columns_x, normalize_method, scaler = None):
 ############
 ### MAIN ###
 ############
-### MAIN ###
-############
-### MAIN ###
-############
 def main(data, columns_x, columns_y, columns_one_hot_encoding, holdout_days, normalize_X, normalize_method):
     # Ensure the $data is sorted from past to present based on the time column.
     data = data.sort_values(by = 't', ascending = True)
