@@ -10,6 +10,11 @@ from modules.add_features import main as add_features
 from modules.is_file import main as is_file
 from modules.messages import msg_info
 
+################
+### SETTINGS ###
+################
+SORT_BY_COLUMNS = ['T', 't']
+
 #################
 ### FUNCTIONS ###
 #################
@@ -38,7 +43,7 @@ def main(filename, filename_output):
     # Remove all rows that contain any NaNs.
     data = data.dropna(axis = 0)
     # Sort the DataFrame by the symbol name and timestamp. This groups stocks and ensures the data for a given stock is in order from earliest to most recent.
-    data = data.sort_values(by = ['T', 't'])
+    data = data.sort_values(by = SORT_BY_COLUMNS)
     # Add various extra features to the $data.
     data = add_features(data)
     # Message to stdout.
@@ -49,6 +54,8 @@ def main(filename, filename_output):
     msg_info('Removing all rows that contain any NaNs after adding features.')
     # Again, remove all rows that contain any NaNs after adding features.
     data = data.dropna(axis = 0)
+    # Ensure the data is still sorted correctly after dropping rows.
+    data = data.sort_values(by = SORT_BY_COLUMNS).reset_index(drop = True)
     # Message to stdout.
     msg_info('Saving data with new features to the output file.')
     # Save the $data with new features to the output file.
