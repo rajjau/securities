@@ -126,13 +126,13 @@ def train_predict_rolling(model, X_train, y_train, X_test, y_test, retrain_step_
     # Initialize a list to store model predictions for each step.
     y_preds = []
     # Total length of the training set.
-    train_len = len(X_train)
+    total_train = len(X_train)
     # Total length of the test set.
-    test_len = len(X_test)
+    total_test = len(X_test)
     # Loop through the test data using the retraining frequency as the step size.
-    for i in range(0, test_len, retrain_step_frequency):
+    for i in range(0, total_test, retrain_step_frequency):
         # Calculate the absolute position in the sequence (train + current test offset).
-        current_cutoff = train_len + i
+        current_cutoff = total_train + i
         # Check if the sliding window was specified.
         if sliding_window_size > 0:
             # If so, then calculate the start of the window, ensuring it doesn't go below index 0.
@@ -141,18 +141,18 @@ def train_predict_rolling(model, X_train, y_train, X_test, y_test, retrain_step_
             # Use the entire training set.
             start_idx = 0
         # Determine if the training window spans across both the train and test sets.
-        if start_idx < train_len:
+        if start_idx < total_train:
             # Create the current window training set by joining the end of X_train with the current X_test progress
             X_curr_train = concat([X_train.iloc[start_idx:], X_test.iloc[:i]])
             # Create the corresponding label set.
             y_curr_train = concat([y_train.iloc[start_idx:], y_test.iloc[:i]])
         else:
             # If the window has moved past the training set, use from the testing set.
-            X_curr_train = X_test.iloc[start_idx - train_len:i]
+            X_curr_train = X_test.iloc[start_idx - total_train:i]
             # Create the corresponding label by taking from the test label set. 
-            y_curr_train = y_test.iloc[start_idx - train_len:i]
+            y_curr_train = y_test.iloc[start_idx - total_train:i]
         # Calculate the end index for the current window.
-        end_idx = min(i + retrain_step_frequency, test_len)
+        end_idx = min(i + retrain_step_frequency, total_test)
         # Create the test set for the current window.
         X_curr_test = X_test.iloc[i:end_idx]
         # Train the model.
