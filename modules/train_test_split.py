@@ -82,6 +82,9 @@ def apply_normalize(X, columns_x, normalize_method, scaler = None):
 ### MAIN ###
 ############
 ### MAIN ###
+############
+### MAIN ###
+############
 def main(data, columns_x, columns_y, columns_one_hot_encoding, holdout_days, normalize_X, normalize_method):
     # Ensure the $data is sorted from past to present based on the time column.
     data = data.sort_values(by = 't', ascending = True)
@@ -107,6 +110,11 @@ def main(data, columns_x, columns_y, columns_one_hot_encoding, holdout_days, nor
             X_test = X_test[mask]
             # Align the testing labels to match the rows kept in the testing features.
             y_test = y_test[mask.values]
+    # Ensure only numeric columns (integers and floats) are kept in the feature list. This is performed on X_train.columns because it now contains the One-Hot Encoded numeric columns.
+    columns_x_ohe = [entry for entry in X_train.columns if X_train[entry].dtype.kind in 'if']
+    # Filter the DataFrames to only include the verified numeric columns.
+    X_train = X_train[columns_x_ohe]
+    if X_test is not None: X_test = X_test[columns_x_ohe]
     # Check if the $normalize_X toggle is set to True.
     if normalize_X is True:
         # If so, then normalize the training set and obtain the fitted scaler.
