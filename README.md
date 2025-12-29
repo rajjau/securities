@@ -35,6 +35,6 @@
 ### 4. Infrastructure & Maintenance
 * **A. System Control**
     * i. **`configuration.ini`:** Centralized control for symbols, holdout periods, and ML toggles.
-    * i. **`learners.yaml`:** Centralized control for defining learners.
+    * ii. **`learners.yaml`:** Centralized control for defining learners.
 * **B. Lifecycle Management (`PERFORM_update.py`)**
-    * i. Incremental update logic that identifies data gaps and fetches only new market days.
+    * iii. Incremental update logic that identifies data gaps and fetches only new market days.
