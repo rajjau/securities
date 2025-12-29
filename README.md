@@ -11,7 +11,7 @@
     * i. Performs data cleaning (duplicate/null removal) and chronological sorting.
     * ii. Prepares the "Golden Dataset" for feature enrichment.
 
-### 2. Feature Engineering (The `modules/` Layer)
+### 2. Feature Engineering
 * **A. Technical Indicators**
     * i. **Moving Averages:** SMA/EMA over windows ranging from 5 to 50 days.
     * ii. **Momentum:** Rate of Change (ROC) and Relative Body Size of candles.
@@ -35,6 +35,6 @@
 ### 4. Infrastructure & Maintenance
 * **A. System Control**
     * i. **`configuration.ini`:** Centralized control for symbols, holdout periods, and ML toggles.
-    * ii. **`auto.sh`:** Bash automation for batch processing across multiple years/symbols.
+    * i. **`learners.yaml`:** Centralized control for defining learners.
 * **B. Lifecycle Management (`PERFORM_update.py`)**
     * i. Incremental update logic that identifies data gaps and fetches only new market days.
