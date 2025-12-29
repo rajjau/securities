@@ -106,7 +106,7 @@ def main(dir_combined, dir_raw, filename_output):
     # Use the final timestamp to determine the age of the data.
     dates = days(last = timestamp_last)
     # Define the output file for the combined raw CSV contents. This places the output file in the $dir_csv directory with the filename containing the prefix (up to the last underscore) from the $filename_prev name. Today's date is added as well.
-    filename_raw_csv = Path(dir_combined, f"{filename_last.stem.rsplit('_', 1)[0]}_{dates[-1]}.csv")
+    filename_raw_csv = Path(dir_combined, f"{filename_last.stem.rsplit('_', 1)[0]}_{dates[-1]}.parquet")
     # Check of the output file already exists.
     if is_file(filename = filename_raw_csv, exit_on_error = False) is False:
         # If not, then download and update the existing data. This will write the new data to the output file.
