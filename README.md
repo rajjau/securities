@@ -1,40 +1,79 @@
-# Project Summary: Financial ML Pipeline
+## Workflow
+1. **Initialization:** Validates the presence of `configuration.ini` and `learners.yaml`.
+   
+2. **Data Importing:** Imports raw CSV data, filters by symbols, and handles caching for faster subsequent runs.
 
-### 1. Data Acquisition & Pre-processing (The `PRE_` Layer)
-* **A. Ingestion (`PRE_1_download.py` & `polygon_io.py`)**
-    * i. Automates market data downloads via Polygon.io API.
-    * ii. Handles date expansion and trading day validation.
-* **B. Consolidation (`PRE_2_combine.py` & `combine_json.py`)**
-    * i. Aggregates daily JSON market snapshots into unified CSV files.
-    * ii. Efficiently flattens nested API responses into tabular formats.
-* **C. Transformation (`PRE_3_features.py` & `add_features.py`)**
-    * i. Performs data cleaning (duplicate/null removal) and chronological sorting.
-    * ii. Prepares the "Golden Dataset" for feature enrichment.
+   A. **Preprocessing:** Verifies the existence of the cache directory and creates it if it does not already exist.
 
-### 2. Feature Engineering
-* **A. Technical Indicators**
-    * i. **Moving Averages:** SMA/EMA over windows ranging from 5 to 50 days.
-    * ii. **Momentum:** Rate of Change (ROC) and Relative Body Size of candles.
-* **B. Temporal & Lagged Logic**
-    * i. **Lagged Data:** Creates historical look-back windows (up to 15 days) for OHLCV data.
-    * ii. **Time Features:** Extracts cyclical patterns from timestamps (Day of Week, Day of Month).
-* **C. Encoding**
-    * i. Implements One-Hot Encoding for categorical data to make it machine-learning ready.
+   B. **Parsing:** If no cache exists, the script reads the source Parquet file and filters the rows to include only the user-specified ticker symbols (column `T`).
 
-### 3. Model Training & Evaluation (`PERFORM_ml.py`)
-* **A. Pipeline Operations**
-    * i. **Normalization:** Scales data using `RobustScaler`, `StandardScaler`, or `MinMaxScaler`.
-    * ii. **Feature Selection:** Reduces noise using `VarianceThreshold` and `SelectKBest`.
-* **B. Machine Learning Strategy (`machine_learning.py`)**
-    * i. **Model Orchestration:** Manages multiple learners (RF, SVC, LogReg) via `learners.yaml`.
-    * ii. **Optimization:** Uses `RandomizedSearchCV` with `TimeSeriesSplit` for leakage-free tuning.
-* **C. Validation & Scoring**
-    * i. **Walk-Forward Retraining:** Implements a rolling-window training schedule to simulate real trading.
-    * ii. **Performance Metrics:** Ranks models using F1-Macro scores and generalization stability.
+   C. **Caching:** Saves the filtered dataset into a local cache file for future runs.
 
-### 4. Infrastructure & Maintenance
-* **A. System Control**
-    * i. **`configuration.ini`:** Centralized control for symbols, holdout periods, and ML toggles.
-    * ii. **`learners.yaml`:** Centralized control for defining learners.
-* **B. Lifecycle Management (`PERFORM_update.py`)**
-    * iii. Incremental update logic that identifies data gaps and fetches only new market days.
+   D. **Dynamic Feature Mapping:** Detects if a wildcard (`*`) is used for feature selection, and if so, automatically identifies and assigns all available columns (excluding the target labels) as the feature set.
+
+3. **Preprocessing:** Split the input data into training and testing sets.
+
+   A. **Sorting:** Sorts the dataset by the time column (`t`), to ensure the model learns from the past to predict on more recent data.
+
+   B. **Time-Based Holdout Split:** Implements a time-series split where the final  days (defined by `t_d`) are used as a testing holdout while all preceding data is used for training.
+   
+   C. **One-Hot Encoding:** Performs One-Hot Encoding on columns defined within `configuration.ini`.
+   
+   D. **Cleanup:** Ensure the training and testing datasets contain only numeric data (types `int` and `float`) and removes all `NaN` values.
+   
+   E. **Normalization:** Fits a scaler (options include **Standard**, **MinMax**, or **Robust**) _only_ on the training data. This fitted scaler is then applied to the test data to prevent "data snooping" or look-ahead bias.
+  
+4. **Feature Selection:** (Optional) Performs one or more of the following feature selection methods. Variance threshold is almost always performed if enabled.
+
+   A. **Variance Threshold:** Filters out features with low variance (threshold set at 0.05). This eliminates "stagnant" columns that do not change enough.
+
+   B. **SelectKBest:** Uses Mutual Information toselects the top N features that share the most information with the labels, helping to reduce noise.
+   
+   C. **Recursive Elimination (RFECV):** Performed using the Decision Tree estimator. It uses a `TimeSeriesSplit` cross-validation strategy to iteratively prune the least important features based on the Macro F1-score.
+
+
+6. **Machine Learning:** Iterates through selected learners (defined in `learners.yaml`) to train a model.
+
+   A. **Load:** Parses the `learners.yaml` file to  import scikit-learn models with their specified hyperparameters. Each model class includes a separate section for hyperparameters to tune during optimization.
+   
+   B. **TimeSeries:** Executes `RandomizedSearchCV` using `TimeSeriesSplit` to tune hyperparameters. This ensures that the optimization process respects the chronological order of financial data, preventing the model from "cheating" by seeing future information during the tuning phase.
+   
+   C. **Cross-Validation:** Performs internal validation on the training set using chronological folds. This provides a mean F1-score and standard deviation.
+   
+   D. **Walk-Forward Rolling Retraining:** Model is periodically retrained as more recent data arrives. It supports:
+      * **Retrain Step Frequency:** How often the model updates its parameters.
+      * **Sliding Window:** Training on a fixed-size history.
+
+7. **Results Aggregation:** Calculates mean scores and standard deviations across all seeds and exports the final metrics to CSV.
+
+## Feature Engineering
+This is the workflow used to engineer features. The Polygon.io service is used to obtain daily data for all tickers and data is obtained from 01/01/2023 to present.
+
+### 1. Data Initialization & Cleaning
+
+* **Sorting:** Orders data by Ticker (`T`) and Timestamp (`t`) to ensure temporal integrity.
+* **Logical Flags:** Benchmarks the current session (e.g., `open_to_close` price action).
+
+### 2. Temporal & Cyclical Encoding
+
+* **Date Normalization:** Extracts days, months, quarters, and month-end flags.
+* **Cyclical Mapping:** Uses Sine and Cosine transformations for "Day of Week" and "Day of Month" to help machine learning models understand time-based loops (e.g., Monday being close to Friday).
+
+### 3. Price Action & Momentum
+
+* **Overnight Gaps:** Calculates the percentage difference between the previous close and current open.
+* **Candlestick Anatomy:** Quantifies body size, upper/lower shadows, and relative body strength.
+* **Interaction Features:** Combines price volatility with volume (e.g., `spread_volume`) to identify high-conviction moves.
+
+### 4. Historical Lagging (Memory)
+
+* **Multi-Day Lags:** Shifts core OHLCV data back up to 15 days (configurable in `configuration.ini`).
+* **Derived Lags:** Calculates historical daily returns and high-low spreads for every lag interval.
+
+### 5. Technical Indicators
+
+Computes window-based statistics across multiple horizons (5, 10, 15, 20, 50 days):
+
+* **Moving Averages:** Distance from simple moving average (SMA) and exponential moving average (EMA) to identify trends.
+* **Volatility:** Rolling Standard Deviation of returns.
+* **Momentum:** Rate of Change (ROC) and Normalized Rolling Ranges.
