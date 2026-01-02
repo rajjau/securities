@@ -54,16 +54,18 @@ def calculate_baseline_accuracy(counts):
     # Display the baseline accuracy to stdout.
     msg_info(f"Num. of Class 0: {counts[0.0]} | Num. of Class 1: {counts[1.0]} | Baseline: {baseline_accuracy:.2%}")
 
-def data_feature_selection(X_train, y_train, X_test, columns_x, perform_feature_selection):
+def data_feature_selection(X_train, y_train, X_test, columns_x, configuration_ini):
     # Create a border to denote a process.
     border('FEATURE SELECTION', border_char='><')
-    if perform_feature_selection:
+    # Check if feature selection was enabled.
+    if configuration_ini.getboolean('GENERAL', 'PERFORM_FEATURE_SELECTION'):
         # Perform feature selection.
         X_train, X_test, selected_features = feature_selection(
             X_train=X_train,
             X_test=X_test,
             y_train=y_train,
-            feature_names=columns_x
+            feature_names=columns_x,
+            configuration_ini=configuration_ini
         )
         # Diplay message to stdout regarding selected features.
         msg_info(f"Selected features: {selected_features.to_list()}")
@@ -137,7 +139,7 @@ def main(filename):
         y_train=y_train,
         X_test=X_test,
         columns_x=columns_x,
-        perform_feature_selection=configuration_ini.getboolean('GENERAL', 'PERFORM_FEATURE_SELECTION')
+        configuration_ini=configuration_ini
     )
     #------------------------#
     #--- Machine Learning ---#
