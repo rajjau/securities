@@ -11,8 +11,24 @@ from sklearn.tree import DecisionTreeClassifier
 #################
 ### FUNCTIONS ###
 #################
+def days_of_the_week(selected_features):
+    # Search for any feature name that contains the specified string.
+    matches = selected_features[selected_features.str.contains('day_of_week_')]
+    # If there are no matches, then return the selected features as-is.
+    if matches.empty: return(selected_features)
+    # Otherwise, define the prefix for each day of the week feature (e.g., 'lagged_day_of_week').
+    prefixes = set(item.rsplit('_', 1)[0] for item in matches)
+    # Define all days of the week.
+    days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+    # Define the missing days of the week.
+    other_days_of_week = Index([f"{prefix}_{day}" for prefix in prefixes for day in days])
+    # Return the union of the existing selected features Index and the one above. This will ensure there's no duplicates.
+    return selected_features.union(other_days_of_week)
+
 def apply_selected_features(X_train, X_test, selected_features):
     """Apply the selected features to both the training and testing datasets."""
+    # If a specific day of the week is selected, then add the other days of the week.
+    selected_features = days_of_the_week(selected_features=selected_features)
     # Update the training data to only include the selected features.
     X_train = X_train[selected_features]
     try:
@@ -22,7 +38,7 @@ def apply_selected_features(X_train, X_test, selected_features):
         # If the test set has not been defined, then do nothing.
         pass
     # Return the modified training and testing datasets.
-    return X_train, X_test
+    return X_train, X_test, selected_features
 
 def variance_threshold(X_train, X_test, feature_names):
     """Perform VarianceThreshold feature selection to remove features with low variance."""
@@ -33,7 +49,7 @@ def variance_threshold(X_train, X_test, feature_names):
     # Define the selected features.
     selected_features = feature_names[selector.get_support()]
     # Update the training and testing data to only include the $selected_features identified by variance.
-    X_train, X_test = apply_selected_features(X_train=X_train, X_test=X_test, selected_features=selected_features)
+    X_train, X_test, selected_features = apply_selected_features(X_train=X_train, X_test=X_test, selected_features=selected_features)
     # Return the selected list of features.
     return selected_features
 
@@ -48,7 +64,7 @@ def select_k_best(X_train, y_train, X_test, feature_names, k):
     # Convert the ndarray to an Index. This keeps the output type consistent.
     selected_features = Index(selected_features)
     # Update the training and testing data to only include the $selected_features identified by variance.
-    X_train, X_test = apply_selected_features(X_train=X_train, X_test=X_test, selected_features=selected_features)
+    X_train, X_test, selected_features = apply_selected_features(X_train=X_train, X_test=X_test, selected_features=selected_features)
     # Return the selected list of features.
     return selected_features
 
@@ -74,7 +90,7 @@ def main(X_train, y_train, X_test, feature_names):
     # Use VarianceThreshold to remove features that are stagnant or nearly constant.
     selected_features = variance_threshold(X_train=X_train, X_test=X_test, feature_names=feature_names)
     # Perform feature selection using SelectKBest based on mutual information. k is set to 25 to allow more depth.
-    selected_features = select_k_best(X_train=X_train, y_train=y_train, X_test=X_test, feature_names=X_train.columns, k=10)
+    selected_features = select_k_best(X_train=X_train, y_train=y_train, X_test=X_test, feature_names=X_train.columns, k=50)
     # Perform feature selection using RFECV.
     # selected_features = recursive_feature_elimination(X_train, y_train, X_test, feature_names)
     # Return the modified $X_train and $X_test sets along with the list of final $selected_features.
