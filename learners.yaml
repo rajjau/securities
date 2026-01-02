@@ -36,7 +36,7 @@ LEARNERS:
   Logistic Regression:
     class: sklearn.linear_model.LogisticRegression
     params:
-      max_iter: 9999999
+      max_iter: 10000
     optimization:
       C: [0.01, 0.1, 0.5, 1.0, .inf]
       class_weight: [balanced, null]
@@ -55,7 +55,7 @@ LEARNERS:
       max_depth: [10, 50, 100, null]
       max_features: [log2, sqrt, null]
       max_leaf_nodes: [10, 100, null]
-      n_estimators: [100, 200, 250]
+      n_estimators: [25, 50, 100, 200, 250]
 
   Ridge CV:
     class: sklearn.linear_model.RidgeClassifierCV
