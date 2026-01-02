@@ -8,6 +8,11 @@ from sklearn.model_selection import TimeSeriesSplit
 #-------------------#
 from sklearn.tree import DecisionTreeClassifier
 
+######################
+### CUSTOM MODULES ###
+######################
+from modules.messages import msg_info
+
 #################
 ### FUNCTIONS ###
 #################
@@ -18,7 +23,7 @@ def days_of_the_week(selected_features):
     if matches.empty: return(selected_features)
     # Otherwise, define the prefix for each day of the week feature (e.g., 'lagged_day_of_week').
     prefixes = set(item.rsplit('_', 1)[0] for item in matches)
-    # Define all days of the week.
+    # Define stock market days of the week.
     days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
     # Define the missing days of the week.
     other_days_of_week = Index([f"{prefix}_{day}" for prefix in prefixes for day in days])
@@ -40,10 +45,12 @@ def apply_selected_features(X_train, X_test, selected_features):
     # Return the modified training and testing datasets.
     return X_train, X_test, selected_features
 
-def variance_threshold(X_train, X_test, feature_names):
+def variance_threshold(X_train, X_test, feature_names, threshold):
     """Perform VarianceThreshold feature selection to remove features with low variance."""
+    # Display threshold to stdout.
+    msg_info(f"VARIANCE THRESHOLD: {threshold}")
     # Initialize the function. Threshold is lowered to 0.0001 to support stationary/percentage features.
-    selector = VarianceThreshold(threshold = 0.95)
+    selector = VarianceThreshold(threshold = threshold)
     # Fit and transform the training data.
     selector.fit_transform(X = X_train)
     # Define the selected features.
@@ -55,6 +62,8 @@ def variance_threshold(X_train, X_test, feature_names):
 
 def select_k_best(X_train, y_train, X_test, feature_names, k):
     """Perform SelectKBest feature selection to select features based on mutual information."""
+    # Display k to stdout.
+    msg_info(f"SELECTKBEST: {k}")
     # Initialize the function.
     selector = SelectKBest(mutual_info_classif, k = k)
     # Fit and transform the training data.
@@ -84,13 +93,23 @@ def recursive_feature_elimination(X_train, y_train, X_test, feature_names):
 ############
 ### MAIN ###
 ############
-def main(X_train, y_train, X_test, feature_names):
+def main(X_train, y_train, X_test, feature_names, configuration_ini):
     # Ensure the $feature_names are of type `Index` from pandas so boolean arrays can be applied.
     feature_names = Index(feature_names)
     # Use VarianceThreshold to remove features that are stagnant or nearly constant.
-    selected_features = variance_threshold(X_train=X_train, X_test=X_test, feature_names=feature_names)
+    selected_features = variance_threshold(
+        X_train=X_train,
+        X_test=X_test,
+        feature_names=feature_names,
+        threshold=configuration_ini.getfloat('FEATURE SELECTION', 'NUM_VARIANCE_THRESHOLD')
+    )
     # Perform feature selection using SelectKBest based on mutual information. k is set to 25 to allow more depth.
-    selected_features = select_k_best(X_train=X_train, y_train=y_train, X_test=X_test, feature_names=X_train.columns, k=50)
+    selected_features = select_k_best(
+        X_train=X_train,
+        y_train=y_train,
+        X_test=X_test,
+        feature_names=X_train.columns,
+        k=configuration_ini.getint('FEATURE SELECTION', 'NUM_SELECTKBEST'))
     # Perform feature selection using RFECV.
     # selected_features = recursive_feature_elimination(X_train, y_train, X_test, feature_names)
     # Return the modified $X_train and $X_test sets along with the list of final $selected_features.
