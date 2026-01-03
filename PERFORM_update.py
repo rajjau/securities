@@ -1,9 +1,7 @@
 #!/usr/bin/env python
 from argparse import ArgumentParser
 from datetime import datetime, timedelta
-from multiprocessing import Pool
-from os import cpu_count
-from pandas import read_csv,to_datetime
+from pandas import read_csv, to_datetime
 from pathlib import Path
 from shutil import copy
 
@@ -26,7 +24,7 @@ def args():
     # Add the arguments to the parser.
     parser.add_argument('directory_combined', type = Path, help = 'Directory containing the combined datasets to continue off from (e.g., "raw_combined").')
     parser.add_argument('directory_raw', type = Path, help = 'Directory containing all raw data from the source (e.g., "raw").')
-    parser.add_argument('--output', type = Path, default = None, help = 'Filename to save the final prepared data to. This is the data that will be used for machine learning. Default: data_<yesterday_date>.csv')
+    parser.add_argument('--output', type = Path, default = None, help = 'Filename to save the final prepared data to. This is the data that will be used for machine learning. Default: data_<yesterday_date>.parquet')
     # Parse the arguments.
     arguments = parser.parse_args()
     # Check if the output filename was provided, otherwise set it to a default value.
@@ -34,11 +32,11 @@ def args():
         # Obtain yesterday's date and format it.
         yesterday = datetime.today() - timedelta(days = 1)
         # Define the output filename using yesterday's date (in YYYY-MM-DD format).
-        arguments.output = Path(f"data_{yesterday.strftime('%Y-%m-%d')}.csv").absolute()
+        arguments.output = Path(f"data_{yesterday.strftime('%Y-%m-%d')}.parquet").absolute()
         # Display a warning message to user that the default filename will be used.
         msg_warn(f"(OPTIONAL) --output: Filename to save the final prepared data to. Default: {arguments.output}")
     # Return the user-defined variables.
-    return(arguments.directory_combined.absolute(), arguments.directory_raw.absolute(), arguments.output.absolute())
+    return arguments.directory_combined.absolute(), arguments.directory_raw.absolute(), arguments.output.absolute()
 
 def get_final_timestamp(filename):
     # Read the data from the file.
@@ -50,7 +48,7 @@ def get_final_timestamp(filename):
     # Get the last timestamp.
     timestamp_last = data.iloc[-1].item()
     # Return the last timestamp from the $filename.
-    return(timestamp_last)
+    return timestamp_last
 
 def days(last):
     # Convert the column containing Unix millisecond timestamps into Pandas datetime format.
@@ -64,20 +62,20 @@ def days(last):
         # If so, then display a message to stdout.
         msg_info(f"The data is up-to-date. The last entry was on: {last.strftime('%A, %B %d %Y')}.")
         # Return bool False.
-        return(False)
+        return False
     else:
         # Otherwise, return a tuple of the last date and today's date in YYYY-MM-DD format.
-        return((last.strftime('%Y-%m-%d'), today.strftime('%Y-%m-%d')))
+        return (last.strftime('%Y-%m-%d'), today.strftime('%Y-%m-%d'))
 
 def update(dir_data, filename_last, dates, filename_raw_csv, filename_features_csv):
     # Download all new data to their respective JSON files, which is returned as a list.
-    filenames_json = download(dir_data = dir_data, dates = dates)
+    filenames_json = download(dir_data=dir_data, dates=dates)
     # Check if the list of JSON files has entries.
     if filenames_json:
         # Copy the existing file to the new output filename.
         copy(filename_last, filename_raw_csv)
         # Combine the data for all filenames.
-        combine_json(filenames = filenames_json, filename_output = filename_raw_csv)
+        combine_json(filenames=filenames_json, filename_output=filename_raw_csv)
         # Display informational message to stdout.
         msg_info(f"Done. Combined raw data written to the output file: '{filename_raw_csv}'")
         # Add features.
@@ -93,8 +91,8 @@ def update(dir_data, filename_last, dates, filename_raw_csv, filename_features_c
 ############
 def main(dir_combined, dir_raw, filename_output):
     # Ensure the specified directories are valid.
-    is_dir(directory = dir_combined, exit_on_error = True)
-    is_dir(directory = dir_raw, exit_on_error = True)
+    is_dir(directory=dir_combined, exit_on_error=True)
+    is_dir(directory=dir_raw, exit_on_error=True)
     # Define a list of all files within the directory containing combined CSV data files.
     filenames = [filename for filename in Path(dir_combined).iterdir() if filename.is_file()]
     # Keep only CSV files and order the list by filename. This will sort the files from earlist to latest as long as the dates are in YYYY-MM-DD format in the filenames.
@@ -104,21 +102,25 @@ def main(dir_combined, dir_raw, filename_output):
     # Obtain the final timestamp from the last CSV.
     timestamp_last = get_final_timestamp(filename = filename_last)
     # Use the final timestamp to determine the age of the data.
-    dates = days(last = timestamp_last)
+    dates = days(last=timestamp_last)
     # Define the output file for the combined raw CSV contents. This places the output file in the $dir_csv directory with the filename containing the prefix (up to the last underscore) from the $filename_prev name. Today's date is added as well.
-    filename_raw_csv = Path(dir_combined, f"{filename_last.stem.rsplit('_', 1)[0]}_{dates[-1]}.parquet")
+    filename_raw_csv = Path(dir_combined, f"{filename_last.stem.rsplit('_', 1)[0]}_{dates[-1]}.csv")
     # Check of the output file already exists.
-    if is_file(filename = filename_raw_csv, exit_on_error = False) is False:
+    if is_file(filename=filename_raw_csv, exit_on_error=False) is False:
         # If not, then download and update the existing data. This will write the new data to the output file.
-        update(dir_data = dir_raw, filename_last = filename_last, dates = dates, filename_raw_csv = filename_raw_csv, filename_features_csv = filename_output)
+        update(
+            dir_data=dir_raw,
+            filename_last=filename_last,
+            dates=dates,
+            filename_raw_csv=filename_raw_csv,
+            filename_features_csv=filename_output
+        )
 
 #############
 ### START ###
 #############
 if __name__ == '__main__':
     # Obtain user-defined variables.
-    [directory_combined, directory_raw, filename_output] = args()
+    directory_combined, directory_raw, filename_output = args()
     # Start the main function.
-    # Start the script.
-    with Pool(processes = cpu_count() - 1) as p: p.apply(main, args = (directory_combined, directory_raw, filename_output,))
-    # main(dir_combined = directory_combined, dir_raw = directory_raw, filename_output = filename_output)
+    main(dir_combined=directory_combined, dir_raw=directory_raw, filename_output=filename_output)
