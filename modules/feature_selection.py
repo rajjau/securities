@@ -6,7 +6,7 @@ from sklearn.model_selection import TimeSeriesSplit
 #-------------------#
 #--- CLASSIFIERS ---#
 #-------------------#
-from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier
 
 ######################
 ### CUSTOM MODULES ###
@@ -84,7 +84,7 @@ def select_k_best(X_train, y_train, X_test, feature_names, k):
 def recursive_feature_elimination(X_train, y_train, X_test, feature_names, cross_validation_folds):
     """Perform Recursive Feature Elimination with Cross-Validation (RFECV) to select features."""
     # Initialize the function. 
-    selector = RFECV(estimator = DecisionTreeClassifier(random_state = 0), cv = TimeSeriesSplit(n_splits = cross_validation_folds), n_jobs = -1, scoring = 'f1_macro')
+    selector = RFECV(estimator = RandomForestClassifier(n_estimators = 25, max_depth = None, random_state = 0), cv = TimeSeriesSplit(n_splits = cross_validation_folds), n_jobs = -1, scoring = 'f1_macro')
     # Fit and transform the training data.
     selector.fit_transform(X = X_train, y = ravel(y_train))
     # Define the selected features.
