@@ -81,16 +81,16 @@ def select_k_best(X_train, y_train, X_test, feature_names, k):
     # Return the selected list of features.
     return selected_features
 
-def recursive_feature_elimination(X_train, y_train, X_test, feature_names):
+def recursive_feature_elimination(X_train, y_train, X_test, feature_names, cross_validation_folds):
     """Perform Recursive Feature Elimination with Cross-Validation (RFECV) to select features."""
-    # Initialize the function.
-    selector = RFECV(estimator = DecisionTreeClassifier(), cv = TimeSeriesSplit(n_splits = 5), n_jobs = -1, scoring = 'f1_macro')
+    # Initialize the function. 
+    selector = RFECV(estimator = DecisionTreeClassifier(random_state = 0), cv = TimeSeriesSplit(n_splits = cross_validation_folds), n_jobs = -1, scoring = 'f1_macro')
     # Fit and transform the training data.
     selector.fit_transform(X = X_train, y = ravel(y_train))
     # Define the selected features.
     selected_features = feature_names[selector.support_]
     # Update the training and testing data to only include the $selected_features identified by variance.
-    X_train, X_test = apply_selected_features(X_train=X_train, X_test=X_test, selected_features=selected_features)
+    X_train, X_test, selected_features = apply_selected_features(X_train=X_train, X_test=X_test, selected_features=selected_features)
     # Return the selected list of features.
     return selected_features
 
@@ -108,13 +108,20 @@ def main(X_train, y_train, X_test, feature_names, configuration_ini):
         threshold=configuration_ini.getfloat('FEATURE SELECTION', 'NUM_VARIANCE_THRESHOLD')
     )
     # Perform feature selection using SelectKBest based on mutual information. k is set to 25 to allow more depth.
-    selected_features = select_k_best(
+    # selected_features = select_k_best(
+    #     X_train=X_train,
+    #     y_train=y_train,
+    #     X_test=X_test,
+    #     feature_names=X_train.columns,
+    #     k=configuration_ini.getint('FEATURE SELECTION', 'NUM_SELECTKBEST')
+    # )
+    # Perform feature selection using RFECV.
+    selected_features = recursive_feature_elimination(
         X_train=X_train,
         y_train=y_train,
         X_test=X_test,
         feature_names=X_train.columns,
-        k=configuration_ini.getint('FEATURE SELECTION', 'NUM_SELECTKBEST'))
-    # Perform feature selection using RFECV.
-    # selected_features = recursive_feature_elimination(X_train, y_train, X_test, feature_names)
+        cross_validation_folds=configuration_ini.getint('ML', 'CROSS_VALIDATION_FOLDS')
+    )
     # Return the modified $X_train and $X_test sets along with the list of final $selected_features.
     return X_train, X_test, selected_features
