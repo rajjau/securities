@@ -158,6 +158,8 @@ def main(filename):
         total_cv_std = []
         # Iterate through each random seed.
         for seed in random_seeds:
+            # Message to stdout.
+            msg_info(f"Seed {seed}")
             # Perform machine learning.
             score_seed, score_cv_seed, score_cv_stddev_seed = machine_learning(
                 X_train=X_train,
