@@ -11,7 +11,7 @@ from sklearn.tree import DecisionTreeClassifier
 ######################
 ### CUSTOM MODULES ###
 ######################
-from modules.messages import msg_info
+from modules.messages import msg_info, msg_warn
 
 #################
 ### FUNCTIONS ###
@@ -21,6 +21,8 @@ def days_of_the_week(selected_features):
     matches = selected_features[selected_features.str.contains('day_of_week_')]
     # If there are no matches, then return the selected features as-is.
     if matches.empty: return(selected_features)
+    # Display a warning message to user.
+    msg_warn('One or more day-of-the-week features have been selected. Adding the other days of the week to avoid bias.')
     # Otherwise, define the prefix for each day of the week feature (e.g., 'lagged_day_of_week').
     prefixes = set(item.rsplit('_', 1)[0] for item in matches)
     # Define stock market days of the week.
@@ -42,13 +44,15 @@ def apply_selected_features(X_train, X_test, selected_features):
     except TypeError:
         # If the test set has not been defined, then do nothing.
         pass
+    # Display number of selected features.
+    print(f"\tSelected {len(selected_features)} of {len(X_train)} features.")
     # Return the modified training and testing datasets.
     return X_train, X_test, selected_features
 
 def variance_threshold(X_train, X_test, feature_names, threshold):
     """Perform VarianceThreshold feature selection to remove features with low variance."""
     # Display threshold to stdout.
-    msg_info(f"VARIANCE THRESHOLD: {threshold}")
+    msg_info(f"VARIANCE THRESHOLD: threshold = {threshold}")
     # Initialize the function. Threshold is lowered to 0.0001 to support stationary/percentage features.
     selector = VarianceThreshold(threshold = threshold)
     # Fit and transform the training data.
@@ -63,7 +67,7 @@ def variance_threshold(X_train, X_test, feature_names, threshold):
 def select_k_best(X_train, y_train, X_test, feature_names, k):
     """Perform SelectKBest feature selection to select features based on mutual information."""
     # Display k to stdout.
-    msg_info(f"SELECTKBEST: {k}")
+    msg_info(f"SELECTKBEST: k = {k}")
     # Initialize the function.
     selector = SelectKBest(mutual_info_classif, k = k)
     # Fit and transform the training data.
