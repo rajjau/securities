@@ -56,7 +56,7 @@ def variance_threshold(X_train, X_test, feature_names, threshold):
     # If the $threshold was set to -1, then VarianceThreshold was disabled.
     if threshold == -1: return X_train, X_test, feature_names
     # Display threshold to stdout.
-    msg_info(f"VARIANCE THRESHOLD: threshold = {threshold}")
+    msg_info(f"VARIANCE THRESHOLD")
     # Initialize the function. Threshold is lowered to 0.0001 to support stationary/percentage features.
     selector = VarianceThreshold(threshold = threshold)
     # Fit and transform the training data.
@@ -71,7 +71,7 @@ def select_k_best(X_train, y_train, X_test, feature_names, k):
     # If $k was set to -1, then SelectKBest was disabled.
     if k == -1: return X_train, X_test, feature_names
     # Display k to stdout.
-    msg_info(f"SELECTKBEST: k = {k}")
+    msg_info(f"SELECTKBEST")
     # Initialize the function.
     selector = SelectKBest(mutual_info_classif, k = k)
     # Fit and transform the training data.
