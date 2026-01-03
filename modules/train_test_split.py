@@ -113,6 +113,8 @@ def main(data, columns_x, columns_y, columns_one_hot_encoding, holdout_days, nor
     if X_test is not None: X_test = X_test[columns_x_ohe]
     # Check if the $normalize_X toggle is set to True.
     if normalize_X is True:
+        # Display a message to stdout.
+        msg_info(f"Applying normalization using {normalize_method}.")
         # If so, then normalize the training set and obtain the fitted scaler.
         X_train, scaler = apply_normalize(X=X_train, columns_x=columns_x_ohe, normalize_method=normalize_method, scaler=None)
         # Use the fitted scaler from the training set to normalize the testing features.
