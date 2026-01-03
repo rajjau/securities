@@ -32,7 +32,7 @@
    C. **Recursive Elimination (RFECV):** Performed using the Decision Tree estimator. It uses a `TimeSeriesSplit` cross-validation strategy to iteratively prune the least important features based on the Macro F1-score.
 
 
-6. **Machine Learning:** Iterates through selected learners (defined in `learners.yaml`) to train a model.
+6. **Machine Learning:** Iterates through selected learners (defined in `learners.yaml`) to train a model. This process is performed over 25 random seeds and the final results are an average over all random seeds.
 
    A. **Load:** Parses the `learners.yaml` file to  import scikit-learn models with their specified hyperparameters. Each model class includes a separate section for hyperparameters to tune during optimization.
    
