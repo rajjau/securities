@@ -83,6 +83,8 @@ def select_k_best(X_train, y_train, X_test, feature_names, k):
 
 def recursive_feature_elimination(X_train, y_train, X_test, feature_names, cross_validation_folds):
     """Perform Recursive Feature Elimination with Cross-Validation (RFECV) to select features."""
+    # Display message to stdout.
+    msg_info(f"RECURSIVE FEATURE ELIMINATION")
     # Initialize the function. 
     selector = RFECV(estimator = RandomForestClassifier(n_estimators = 25, max_depth = None, random_state = 0), cv = TimeSeriesSplit(n_splits = cross_validation_folds), n_jobs = -1, scoring = 'f1_macro')
     # Fit and transform the training data.
