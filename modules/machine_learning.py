@@ -1,9 +1,11 @@
 #!/usr/bin/env python
-from importlib import import_module
+from functools import partial
+from joblib import dump
+from json import loads
 from numpy import inf
 from pathlib import Path
 from pandas import concat
-from sklearn.metrics import f1_score
+from sklearn.metrics import make_scorer
 from sklearn.model_selection import cross_val_score, RandomizedSearchCV, TimeSeriesSplit
 from yaml import safe_load
 
@@ -11,6 +13,7 @@ from yaml import safe_load
 ### CUSTOM MODULES ###
 ######################
 from modules.date_and_time import main as date_and_time
+from modules.dynamic_module_load import main as dynamic_module_load
 from modules.messages import msg_info,msg_warn
 
 ################
@@ -38,16 +41,12 @@ def load_learners(learners_yaml):
     with open(learners_yaml, 'r') as f: config = safe_load(f)['LEARNERS']
     # Iterate through each learner defined in the configuration.
     for name, info in config.items():
-        # Split the class string so the learner can be imported.
-        module_path, class_name = info['class'].rsplit('.', 1)
-        # Dynamically import the required module.
-        module = import_module(module_path)
-        # Retrieve the model class from the imported module.
-        model_class = getattr(module, class_name)
-        # Extract the fixed parameters from the configuration.
-        fixed_params = info.get('params', {})
+        # Import the module using the specified string.
+        module_class = dynamic_module_load(module_str=info['class'])        
+        # Extract the parameters from the configuration.
+        params = info.get('params', {})
         # Instantiate the learner and store it in the global $learners dictionary.
-        learners[name] = model_class(**fixed_params)
+        learners[name] = module_class(**params)
         # Extract the optimization parameters.
         optimization_params = info.get('optimization', {})
         # Check if the current learner is Logistic Regression to handle the infinity string conversion.
@@ -69,7 +68,7 @@ def set_universal_params(model, random_state):
     # Return the $model.
     return model
 
-def hyperparameter_optimization(X_train, y_train, name, cross_validation_folds, random_state):
+def hyperparameter_optimization(X_train, y_train, name, cross_validation_folds, random_state, scoring):
     try:
         # Obtain the parameters from the dictionary defined above.
         params = learners_hyperparameters[name].copy()
@@ -106,7 +105,7 @@ def hyperparameter_optimization(X_train, y_train, name, cross_validation_folds, 
         n_jobs = -1,
         param_distributions = params,
         random_state = random_state,
-        scoring = 'f1_macro'
+        scoring = scoring
     )
     # Fit the model to the training data.
     search.fit(X_train, y_train)
@@ -118,11 +117,11 @@ def hyperparameter_optimization(X_train, y_train, name, cross_validation_folds, 
 def cross_validation(model, X, y, cross_validation_folds):
     """Run cross-validation using chronological folds."""
     # Execute cross-validation using TimeSeriesSplit to ensure no look-ahead bias during validation.
-    score_cv = cross_val_score(model, X, y, cv=TimeSeriesSplit(n_splits=cross_validation_folds), scoring='f1_macro')
+    score_cv = cross_val_score(model, X, y, cv=TimeSeriesSplit(n_splits=cross_validation_folds), scoring='matthews_corrcoef')
     # Return the cross-validation mean score and standard deviation.
     return score_cv.mean(), score_cv.std()
 
-def train_predict_rolling(model, X_train, y_train, X_test, y_test, retrain_step_frequency, sliding_window_size):
+def train_predict_rolling(model, X_train, y_train, X_test, y_test, retrain_step_frequency, sliding_window_size, scoring_metric):
     # Initialize a list to store model predictions for each step.
     y_preds = []
     # Total length of the training set.
@@ -162,7 +161,7 @@ def train_predict_rolling(model, X_train, y_train, X_test, y_test, retrain_step_
     # Align the true labels with the total number of predictions made.
     y_true = y_test.iloc[:len(y_preds)]
     # Compute the score.
-    score = f1_score(y_true = y_true, y_pred = y_preds, average = 'macro')
+    score = scoring_metric(y_true = y_true, y_pred = y_preds)
     # Return the $score.
     return score
 
@@ -195,6 +194,10 @@ def main(X_train, y_train, X_test, y_test, name, learners_yaml, symbols, random_
     cross_validation_folds = configuration_ini.getint('ML', 'CROSS_VALIDATION_FOLDS')
     # Load configuration to populate global dictionaries.
     load_learners(learners_yaml=learners_yaml)
+    # Dynamically load the scoring metric.
+    scoring_metric = dynamic_module_load(module_str=configuration_ini.get('ML', 'SCORING_METRIC'))
+    # Load extra parameters defined in the configuration.ini.
+    scoring_metric_params = loads(configuration_ini.get('ML', 'SCORING_METRIC_PARAMETERS'))
     # Execute hyperparameter optimization (HPO) only on the training set to prevent leakage from the test set.
     if configuration_ini.getboolean('GENERAL', 'PERFORM_HYPERPARAMETER_OPTIMIZATION') is True:
         # Perform hyperparameter optimization.
@@ -203,7 +206,8 @@ def main(X_train, y_train, X_test, y_test, name, learners_yaml, symbols, random_
             y_train=y_train,
             name=name,
             cross_validation_folds=configuration_ini.getint('ML', 'CROSS_VALIDATION_FOLDS'),
-            random_state=random_state
+            random_state=random_state,
+            scoring=make_scorer(score_func = scoring_metric, **scoring_metric_params)
         )
     else:
         # Retrieve the learner with default parameters.
@@ -226,7 +230,8 @@ def main(X_train, y_train, X_test, y_test, name, learners_yaml, symbols, random_
             X_test=X_test,
             y_test=y_test,
             retrain_step_frequency=configuration_ini.getint('ML', 'RETRAIN_STEP_FREQUENCY'),
-            sliding_window_size=configuration_ini.getint('ML', 'SLIDING_WINDOW_SIZE')
+            sliding_window_size=configuration_ini.getint('ML', 'SLIDING_WINDOW_SIZE'),
+            scoring_metric=partial(scoring_metric, **scoring_metric_params)
         )
     else:
         # Otherwise, fit the model on the full training set for production use.

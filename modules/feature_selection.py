@@ -1,7 +1,9 @@
 #!/usr/bin/env python
+from json import loads
 from numpy import ravel
 from pandas import Index
 from sklearn.feature_selection import mutual_info_classif, RFECV, SelectKBest, VarianceThreshold
+from sklearn.metrics import make_scorer
 from sklearn.model_selection import TimeSeriesSplit
 #-------------------#
 #--- CLASSIFIERS ---#
@@ -11,6 +13,7 @@ from sklearn.ensemble import RandomForestClassifier
 ######################
 ### CUSTOM MODULES ###
 ######################
+from modules.dynamic_module_load import main as dynamic_module_load
 from modules.messages import msg_info, msg_warn
 
 #################
@@ -83,14 +86,14 @@ def select_k_best(X_train, y_train, X_test, feature_names, k):
     # Update the training and testing data to only include the $selected_features identified by variance.
     return apply_selected_features(X_train=X_train, X_test=X_test, selected_features=selected_features)
 
-def recursive_feature_elimination(X_train, y_train, X_test, feature_names, cross_validation_folds, scoring):
+def recursive_feature_elimination(X_train, y_train, X_test, feature_names, is_enabled, cross_validation_folds, scoring):
     """Perform Recursive Feature Elimination with Cross-Validation (RFECV) to select features."""
     # If the scoring was set to -1 (str) then RFECV was disabled.
-    if scoring == '-1': return X_train, X_test, feature_names
+    if not is_enabled: return X_train, X_test, feature_names
     # Display message to stdout.
     msg_info(f"RECURSIVE FEATURE ELIMINATION")
     # Initialize the function. 
-    selector = RFECV(estimator = RandomForestClassifier(n_estimators = 25, max_depth = None, random_state = 0), cv = TimeSeriesSplit(n_splits = cross_validation_folds), n_jobs = -1, scoring = 'f1_macro')
+    selector = RFECV(estimator = RandomForestClassifier(n_estimators = 25, max_depth = None, random_state = 0), cv = TimeSeriesSplit(n_splits = cross_validation_folds), n_jobs = -1, scoring = scoring)
     # Fit and transform the training data.
     selector.fit_transform(X = X_train, y = ravel(y_train))
     # Define the selected features.
@@ -109,7 +112,7 @@ def main(X_train, y_train, X_test, feature_names, configuration_ini):
         X_train=X_train,
         X_test=X_test,
         feature_names=feature_names,
-        threshold=configuration_ini.getfloat('FEATURE SELECTION', 'NUM_VARIANCE_THRESHOLD')
+        threshold=configuration_ini.getfloat('FEATURE SELECTION', 'VARIANCE_THRESHOLD')
     )
     # Perform feature selection using SelectKBest based on mutual information. k is set to 25 to allow more depth.
     X_train, X_test, selected_features = select_k_best(
@@ -117,16 +120,21 @@ def main(X_train, y_train, X_test, feature_names, configuration_ini):
         y_train=y_train,
         X_test=X_test,
         feature_names=X_train.columns,
-        k=configuration_ini.getint('FEATURE SELECTION', 'NUM_SELECTKBEST')
+        k=configuration_ini.getint('FEATURE SELECTION', 'SELECTKBEST')
     )
+    # Dynamically load the scoring metric.
+    scoring_metric = dynamic_module_load(module_str=configuration_ini.get('ML', 'SCORING_METRIC'))
+    # Load extra parameters defined in the configuration.ini.
+    scoring_metric_params = loads(configuration_ini.get('ML', 'SCORING_METRIC_PARAMETERS'))
     # Perform feature selection using RFECV.
     X_train, X_test, selected_features = recursive_feature_elimination(
         X_train=X_train,
         y_train=y_train,
         X_test=X_test,
         feature_names=X_train.columns,
+        is_enabled=configuration_ini.getboolean('FEATURE SELECTION', 'RFECV'),
         cross_validation_folds=configuration_ini.getint('ML', 'CROSS_VALIDATION_FOLDS'),
-        scoring=configuration_ini.get('FEATURE SELECTION', 'SCORING_RFECV')
+        scoring=make_scorer(score_func = scoring_metric, **scoring_metric_params)
     )
     # Return the modified $X_train and $X_test sets along with the list of final $selected_features.
     return X_train, X_test, selected_features
