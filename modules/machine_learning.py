@@ -195,7 +195,7 @@ def save(saved_model, model, score, save_threshold):
 ############
 ### MAIN ###
 ############
-def main(X_train, y_train, X_test, y_test, name, learners_yaml, symbols, random_state, configuration_ini):
+def main(X_train, y_train, X_test, y_test, name, symbols, random_state, configuration_ini, learners_yaml):
     # Obtain number of cross-validation folds from configuration file.
     cross_validation_folds = configuration_ini.getint('ML', 'CROSS_VALIDATION_FOLDS')
     # Load configuration to populate global dictionaries.
