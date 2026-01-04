@@ -54,12 +54,14 @@ def apply_selected_features(X_train, X_test, selected_features):
     # Return the modified training and testing datasets.
     return X_train, X_test, selected_features
 
-def variance_threshold(X_train, X_test, feature_names, threshold):
+def variance_threshold(X_train, X_test, feature_names, is_enabled, threshold):
     """Perform VarianceThreshold feature selection to remove features with low variance."""
-    # If the $threshold was set to -1, then VarianceThreshold was disabled.
-    if threshold == -1: return X_train, X_test, feature_names
-    # Display threshold to stdout.
+    # Check if VarianceThreshold was disabled.
+    if not is_enabled: return X_train, X_test, feature_names
+    # Display message to stdout.
     msg_info(f"VARIANCE THRESHOLD")
+    # Display specified parameters to stdout.
+    msg_info(f"Threshold: {threshold}")
     # Initialize the function. Threshold is lowered to 0.0001 to support stationary/percentage features.
     selector = VarianceThreshold(threshold = threshold)
     # Fit and transform the training data.
@@ -69,12 +71,14 @@ def variance_threshold(X_train, X_test, feature_names, threshold):
     # Update the training and testing data to only include the $selected_features identified by variance.
     return apply_selected_features(X_train=X_train, X_test=X_test, selected_features=selected_features)
 
-def select_k_best(X_train, y_train, X_test, feature_names, k):
+def select_k_best(X_train, y_train, X_test, feature_names, is_enabled, k):
     """Perform SelectKBest feature selection to select features based on mutual information."""
-    # If $k was set to -1, then SelectKBest was disabled.
-    if k == -1: return X_train, X_test, feature_names
-    # Display k to stdout.
+    # Check if SelectKBest was disabled.
+    if not is_enabled: return X_train, X_test, feature_names
+    # Display message to stdout.
     msg_info(f"SELECTKBEST")
+    # Display specified parameters to stdout.
+    msg_info(f"K: {k}")
     # Initialize the function.
     selector = SelectKBest(mutual_info_classif, k = k)
     # Fit and transform the training data.
@@ -86,16 +90,20 @@ def select_k_best(X_train, y_train, X_test, feature_names, k):
     # Update the training and testing data to only include the $selected_features identified by variance.
     return apply_selected_features(X_train=X_train, X_test=X_test, selected_features=selected_features)
 
-def recursive_feature_elimination(X_train, y_train, X_test, feature_names, is_enabled, cross_validation_folds, scoring):
+def recursive_feature_elimination(X_train, y_train, X_test, feature_names, is_enabled, cross_validation_folds, scoring, step_size):
     """Perform Recursive Feature Elimination with Cross-Validation (RFECV) to select features."""
-    # If the scoring was set to -1 (str) then RFECV was disabled.
+    # Check if RFECV was disabled.
     if not is_enabled: return X_train, X_test, feature_names
     # Display message to stdout.
     msg_info(f"RECURSIVE FEATURE ELIMINATION")
-    # Display the scoring metric and specific parameters to stdout.
-    msg_info(f"Scoring metric: {scoring}");
+    # Display specified parameters to stdout.
+    msg_info(f"Scoring metric: {scoring}")
+    # Convert the step size to type int if greater than 0, otherwise it will error out.
+    if step_size > 0: step_size = int(step_size)
+    # Display the parameters to stdout.
+    msg_info(f"Step Size: {step_size}")
     # Initialize the function. 
-    selector = RFECV(estimator = RandomForestClassifier(n_estimators = 250, max_depth = None, random_state = 0), cv = TimeSeriesSplit(n_splits = cross_validation_folds), n_jobs = -1, scoring = scoring, step = 5)
+    selector = RFECV(estimator = RandomForestClassifier(n_estimators = 250, max_depth = None, random_state = 0), cv = TimeSeriesSplit(n_splits = cross_validation_folds), n_jobs = -1, scoring = scoring, step = step_size)
     # Fit and transform the training data.
     selector.fit_transform(X = X_train, y = ravel(y_train))
     # Define the selected features.
@@ -114,7 +122,8 @@ def main(X_train, y_train, X_test, feature_names, configuration_ini):
         X_train=X_train,
         X_test=X_test,
         feature_names=feature_names,
-        threshold=configuration_ini.getfloat('FEATURE SELECTION', 'VARIANCE_THRESHOLD')
+        is_enabled=configuration_ini.getboolean('FEATURE SELECTION', 'ENABLE_VARIANCE_THRESHOLD'),
+        threshold=configuration_ini.getfloat('FEATURE SELECTION', 'VARIANCE_THRESHOLD_THRESHOLD')
     )
     # Perform feature selection using SelectKBest based on mutual information. k is set to 25 to allow more depth.
     X_train, X_test, selected_features = select_k_best(
@@ -122,7 +131,8 @@ def main(X_train, y_train, X_test, feature_names, configuration_ini):
         y_train=y_train,
         X_test=X_test,
         feature_names=X_train.columns,
-        k=configuration_ini.getint('FEATURE SELECTION', 'SELECTKBEST')
+        is_enabled=configuration_ini.getboolean('FEATURE SELECTION', 'ENABLE_SELECTKBEST'),
+        k=configuration_ini.getint('FEATURE SELECTION', 'SELECTKBEST_K')
     )
     # Dynamically load the scoring metric.
     scoring_metric = dynamic_module_load(module_str=configuration_ini.get('ML', 'SCORING_METRIC'))
@@ -134,9 +144,10 @@ def main(X_train, y_train, X_test, feature_names, configuration_ini):
         y_train=y_train,
         X_test=X_test,
         feature_names=X_train.columns,
-        is_enabled=configuration_ini.getboolean('FEATURE SELECTION', 'RFECV'),
+        is_enabled=configuration_ini.getboolean('FEATURE SELECTION', 'ENABLE_RFECV'),
         cross_validation_folds=configuration_ini.getint('ML', 'CROSS_VALIDATION_FOLDS'),
-        scoring=make_scorer(score_func = scoring_metric, **scoring_metric_params)
+        scoring=make_scorer(score_func = scoring_metric, **scoring_metric_params),
+        step_size=configuration_ini.getfloat('FEATURE SELECTION', 'RFECV_STEP_SIZE')
     )
     # Return the modified $X_train and $X_test sets along with the list of final $selected_features.
     return X_train, X_test, selected_features
