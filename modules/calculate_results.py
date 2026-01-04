@@ -61,12 +61,6 @@ def calculate_average_scores(df_scores):
 ### MAIN ###
 ############
 def main(learner, total_score, total_cv_score, total_cv_std, random_seeds, save_results_to_file, output_filename):
-    # Check if the total score list is empty.
-    if all(total_score) is False:
-        # Display warning message to user.
-        msg_warn('There are no performance scores on the test set.')
-        # Return Nonetype
-        return None
     # Convert the lists of scores to a single Pandas DataFrame.
     df_scores = convert_to_dataframe(
                     learner=learner,
@@ -75,6 +69,12 @@ def main(learner, total_score, total_cv_score, total_cv_std, random_seeds, save_
                     total_cv_score=total_cv_score,
                     total_cv_std=total_cv_std
                     )
+    # Check if the performance scores column is empty. Converting to a DataFrame above and checking here is the fastest way to check.
+    if df_scores[learner].isnull().all():
+        # Display warning message to user.
+        msg_warn('There are no performance scores on the test set.')
+        # Return Nonetype
+        return None
     # Sort the DataFrame from best performance to worst.
     df_scores = rank_scores(df_scores=df_scores, learner=learner)
     # Calculate the averages for the scores columns.
