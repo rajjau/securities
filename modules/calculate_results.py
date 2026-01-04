@@ -48,7 +48,7 @@ def calculate_average_scores(df_scores, col_scores):
 ############
 ### MAIN ###
 ############
-def main(learner, total_score, total_cv_score, total_cv_std, random_seeds, save_results_to_file, output_filename):
+def main(learner, total_score, total_cv_score, total_cv_std, random_seeds, save_results_to_file, filename_output):
     # Convert the lists of scores to a single Pandas DataFrame.
     df_scores, col_scores = convert_to_dataframe(
         learner=learner,
@@ -68,8 +68,8 @@ def main(learner, total_score, total_cv_score, total_cv_std, random_seeds, save_
     # Check if the results should be saved to a file.
     if save_results_to_file:
         # Display message to stdout regarding output filename.
-        msg_info(f"Saving results to: {output_filename}")
+        msg_info(f"Saving results to: {filename_output}")
         # Save the scores to a CSV file.
-        df_scores.to_csv(output_filename, index=False, quoting=1)
+        df_scores.to_csv(filename_output, index=False, quoting=1)
     # Display the scores to stdout.
     print(df_scores.to_string(index = False))
