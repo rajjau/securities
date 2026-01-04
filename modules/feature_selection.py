@@ -92,6 +92,8 @@ def recursive_feature_elimination(X_train, y_train, X_test, feature_names, is_en
     if not is_enabled: return X_train, X_test, feature_names
     # Display message to stdout.
     msg_info(f"RECURSIVE FEATURE ELIMINATION")
+    # Display the scoring metric and specific parameters to stdout.
+    msg_info(f"Scoring metric: {scoring}");
     # Initialize the function. 
     selector = RFECV(estimator = RandomForestClassifier(n_estimators = 25, max_depth = None, random_state = 0), cv = TimeSeriesSplit(n_splits = cross_validation_folds), n_jobs = -1, scoring = scoring)
     # Fit and transform the training data.
