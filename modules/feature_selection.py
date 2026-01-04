@@ -90,7 +90,7 @@ def select_k_best(X_train, y_train, X_test, feature_names, is_enabled, k):
     # Update the training and testing data to only include the $selected_features identified by variance.
     return apply_selected_features(X_train=X_train, X_test=X_test, selected_features=selected_features)
 
-def recursive_feature_elimination(X_train, y_train, X_test, feature_names, is_enabled, cross_validation_folds, scoring, step_size):
+def recursive_feature_elimination(X_train, y_train, X_test, feature_names, is_enabled, cross_validation_folds, min_features_to_select, scoring, step_size):
     """Perform Recursive Feature Elimination with Cross-Validation (RFECV) to select features."""
     # Check if RFECV was disabled.
     if not is_enabled: return X_train, X_test, feature_names
@@ -98,12 +98,20 @@ def recursive_feature_elimination(X_train, y_train, X_test, feature_names, is_en
     msg_info(f"RECURSIVE FEATURE ELIMINATION")
     # Display specified parameters to stdout.
     msg_info(f"Scoring metric: {scoring}")
+    msg_info(f"Min. number of features to select: {min_features_to_select}")
     # Convert the step size to type int if greater than 0, otherwise it will error out.
     if step_size > 0: step_size = int(step_size)
     # Display the parameters to stdout.
     msg_info(f"Step Size: {step_size}")
     # Initialize the function. 
-    selector = RFECV(estimator = RandomForestClassifier(n_estimators = 250, max_depth = None, random_state = 0), cv = TimeSeriesSplit(n_splits = cross_validation_folds), n_jobs = -1, scoring = scoring, step = step_size)
+    selector = RFECV(
+        estimator = RandomForestClassifier(n_estimators = 250, max_depth = 5, min_samples_leaf = 10, random_state = 0),
+        cv = TimeSeriesSplit(n_splits = cross_validation_folds),
+        min_features_to_select = min_features_to_select,
+        n_jobs = -1,
+        scoring = scoring,
+        step = step_size
+    )
     # Fit and transform the training data.
     selector.fit_transform(X = X_train, y = ravel(y_train))
     # Define the selected features.
@@ -146,6 +154,7 @@ def main(X_train, y_train, X_test, feature_names, configuration_ini):
         feature_names=X_train.columns,
         is_enabled=configuration_ini.getboolean('FEATURE SELECTION', 'ENABLE_RFECV'),
         cross_validation_folds=configuration_ini.getint('ML', 'CROSS_VALIDATION_FOLDS'),
+        min_features_to_select=configuration_ini.getint('FEATURE SELECTION', 'RFECV_MIN_FEATURES'),
         scoring=make_scorer(score_func = scoring_metric, **scoring_metric_params),
         step_size=configuration_ini.getfloat('FEATURE SELECTION', 'RFECV_STEP_SIZE')
     )
