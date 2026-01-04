@@ -7,7 +7,7 @@ from pathlib import Path
 ### CUSTOM MODULES ###
 ######################
 from modules.border import main as border
-from modules.feature_selection import main as feature_selection
+from modules.feature_selection_wrapper import main as feature_selection_wrapper
 from modules.calculate_results import main as calculate_results
 from modules.import_and_parse import main as import_and_parse
 from modules.is_file import main as is_file
@@ -53,28 +53,6 @@ def calculate_baseline_accuracy(counts):
     baseline_accuracy = counts.max() / counts.sum()
     # Display the baseline accuracy to stdout.
     msg_info(f"Num. of Class 0: {counts[0.0]} | Num. of Class 1: {counts[1.0]} | Baseline: {baseline_accuracy:.2%}")
-
-def data_feature_selection(X_train, y_train, X_test, columns_x, configuration_ini):
-    # Create a border to denote a process.
-    border('FEATURE SELECTION', border_char='><')
-    # Check if feature selection was enabled.
-    if configuration_ini.getboolean('GENERAL', 'PERFORM_FEATURE_SELECTION'):
-        # Perform feature selection.
-        X_train, X_test, selected_features = feature_selection(
-            X_train=X_train,
-            X_test=X_test,
-            y_train=y_train,
-            feature_names=columns_x,
-            configuration_ini=configuration_ini
-        )
-        # Diplay message to stdout regarding selected features.
-        msg_info(f"Selected features: {selected_features.to_list()}")
-        msg_info(f"Kept {len(selected_features)} out of {len(columns_x)} total features.")
-    else:
-        # Display message to stdout that feature selection will not be performed.
-        msg_info('Feature selection was set to False and will not be performed. Edit this script to change this.')
-    # Return the training and testing data after feature selection.
-    return X_train, X_test
 
 ############
 ### MAIN ###
@@ -130,15 +108,21 @@ def main(filename):
         normalize_X=True,
         normalize_method=configuration_ini['NORMALIZATION']['NORMALIZE_METHOD']
     )
+    #----------------------#
+    #--- Random Seed(s) ---#
+    #----------------------#
+    # Define the random seed(s).
+    random_seeds = [int(item) for item in convert_to_list(string=configuration_ini['GENERAL']['RANDOM_SEED'], delimiter=',')]
     #-------------------------#
     #--- Feature Selection ---#
     #-------------------------#
     # Perform feature selection.
-    X_train, X_test = data_feature_selection(
+    X_train, X_test = feature_selection_wrapper(
         X_train=X_train,
         y_train=y_train,
         X_test=X_test,
         columns_x=columns_x,
+        random_seeds=random_seeds,
         configuration_ini=configuration_ini
     )
     #------------------------#
@@ -146,8 +130,6 @@ def main(filename):
     #------------------------#
     # Define the machine learning algorithms to use.
     use_learners = convert_to_list(string=configuration_ini['ML']['USE_LEARNERS'], delimiter=',')
-    # Define the random seed(s).
-    random_seeds = [int(item) for item in convert_to_list(string=configuration_ini['GENERAL']['RANDOM_SEED'], delimiter=',')]
     # Iterate through each random seed.
     for learner in use_learners:
         # Create a border to denote a process.
@@ -167,10 +149,10 @@ def main(filename):
                 X_test=X_test,
                 y_test=y_test,
                 name=learner,
-                learners_yaml=LEARNERS_YAML,
                 symbols=symbols,
                 random_state=seed,
-                configuration_ini=configuration_ini
+                configuration_ini=configuration_ini,
+                learners_yaml=LEARNERS_YAML
             )
             # Add the score for the current $learner for the current $seed.
             total_score.append(score_seed)
@@ -181,7 +163,7 @@ def main(filename):
         #--- Score ---#
         #-------------#
         # Define the output filename.
-        output_filename = Path(ROOT, f'RESULTS_{learner.replace(" ", "_")}.csv').absolute()
+        filename_output = Path(ROOT, f'RESULTS_{learner.replace(" ", "_")}.csv').absolute()
         # Calculate and display the average scores for the current learner across all random seeds.
         calculate_results(
             learner=learner,
@@ -190,7 +172,7 @@ def main(filename):
             total_cv_std=total_cv_std,
             random_seeds=random_seeds,
             save_results_to_file=configuration_ini.getboolean('GENERAL', 'SAVE_RESULTS_TO_FILE'),
-            output_filename=output_filename
+            filename_output=filename_output
         )
 
 #############

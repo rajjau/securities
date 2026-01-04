@@ -13,55 +13,16 @@ from sklearn.ensemble import RandomForestClassifier
 ######################
 ### CUSTOM MODULES ###
 ######################
+from modules.apply_features import main as apply_features
 from modules.dynamic_module_load import main as dynamic_module_load
-from modules.messages import msg_info, msg_warn
 
 #################
 ### FUNCTIONS ###
 #################
-def days_of_the_week(selected_features):
-    # Search for any feature name that contains the specified string.
-    matches = selected_features[selected_features.str.contains('day_of_week_')]
-    # If there are no matches, then return the selected features as-is.
-    if matches.empty: return(selected_features)
-    # Display a warning message to user.
-    msg_warn('One or more day-of-the-week features have been selected. Adding the other days of the week to avoid bias.')
-    # Otherwise, define the prefix for each day of the week feature (e.g., 'lagged_day_of_week').
-    prefixes = set(item.rsplit('_', 1)[0] for item in matches)
-    # Define stock market days of the week.
-    days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
-    # Define the missing days of the week.
-    other_days_of_week = Index([f"{prefix}_{day}" for prefix in prefixes for day in days])
-    # Return the union of the existing selected features Index and the one above. This will ensure there's no duplicates.
-    return selected_features.union(other_days_of_week)
-
-def apply_selected_features(X_train, X_test, selected_features):
-    """Apply the selected features to both the training and testing datasets."""
-    # If a specific day of the week is selected, then add the other days of the week.
-    selected_features = days_of_the_week(selected_features=selected_features)
-    # Define the current number of features.
-    total_features = len(X_train.columns)
-    # Update the training data to only include the selected features.
-    X_train = X_train[selected_features]
-    try:
-        # Do the same for the test set.
-        X_test = X_test[selected_features]
-    except TypeError:
-        # If the test set has not been defined, then do nothing.
-        pass
-    # Display number of selected features.
-    msg_info(f"Selected {len(selected_features)} of {total_features} features.")
-    # Return the modified training and testing datasets.
-    return X_train, X_test, selected_features
-
 def variance_threshold(X_train, X_test, feature_names, is_enabled, threshold):
     """Perform VarianceThreshold feature selection to remove features with low variance."""
     # Check if VarianceThreshold was disabled.
     if not is_enabled: return X_train, X_test, feature_names
-    # Display message to stdout.
-    msg_info(f"VARIANCE THRESHOLD")
-    # Display specified parameters to stdout.
-    msg_info(f"Threshold: {threshold}")
     # Initialize the function. Threshold is lowered to 0.0001 to support stationary/percentage features.
     selector = VarianceThreshold(threshold = threshold)
     # Fit and transform the training data.
@@ -69,16 +30,12 @@ def variance_threshold(X_train, X_test, feature_names, is_enabled, threshold):
     # Define the selected features.
     selected_features = feature_names[selector.get_support()]
     # Update the training and testing data to only include the $selected_features identified by variance.
-    return apply_selected_features(X_train=X_train, X_test=X_test, selected_features=selected_features)
+    return apply_features(X_train=X_train, X_test=X_test, selected_features=selected_features, verbose=False)
 
 def select_k_best(X_train, y_train, X_test, feature_names, is_enabled, k):
     """Perform SelectKBest feature selection to select features based on mutual information."""
     # Check if SelectKBest was disabled.
     if not is_enabled: return X_train, X_test, feature_names
-    # Display message to stdout.
-    msg_info(f"SELECTKBEST")
-    # Display specified parameters to stdout.
-    msg_info(f"K: {k}")
     # Initialize the function.
     selector = SelectKBest(mutual_info_classif, k = k)
     # Fit and transform the training data.
@@ -88,24 +45,17 @@ def select_k_best(X_train, y_train, X_test, feature_names, is_enabled, k):
     # Convert the ndarray to an Index. This keeps the output type consistent.
     selected_features = Index(selected_features)
     # Update the training and testing data to only include the $selected_features identified by variance.
-    return apply_selected_features(X_train=X_train, X_test=X_test, selected_features=selected_features)
+    return apply_features(X_train=X_train, X_test=X_test, selected_features=selected_features, verbose=False)
 
-def recursive_feature_elimination(X_train, y_train, X_test, feature_names, is_enabled, cross_validation_folds, min_features_to_select, scoring, step_size):
+def recursive_feature_elimination(X_train, y_train, X_test, feature_names, random_state, is_enabled, cross_validation_folds, min_features_to_select, scoring, step_size):
     """Perform Recursive Feature Elimination with Cross-Validation (RFECV) to select features."""
     # Check if RFECV was disabled.
     if not is_enabled: return X_train, X_test, feature_names
-    # Display message to stdout.
-    msg_info(f"RECURSIVE FEATURE ELIMINATION")
-    # Display specified parameters to stdout.
-    msg_info(f"Scoring metric: {scoring}")
-    msg_info(f"Min. number of features to select: {min_features_to_select}")
     # Convert the step size to type int if greater than 0, otherwise it will error out.
     if step_size > 0: step_size = int(step_size)
-    # Display the parameters to stdout.
-    msg_info(f"Step Size: {step_size}")
     # Initialize the function. 
     selector = RFECV(
-        estimator = RandomForestClassifier(n_estimators = 250, max_depth = 5, min_samples_leaf = 10, random_state = 0),
+        estimator = RandomForestClassifier(n_estimators = 250, max_depth = 3, min_samples_leaf = 10, random_state = random_state),
         cv = TimeSeriesSplit(n_splits = cross_validation_folds),
         min_features_to_select = min_features_to_select,
         n_jobs = -1,
@@ -117,12 +67,12 @@ def recursive_feature_elimination(X_train, y_train, X_test, feature_names, is_en
     # Define the selected features.
     selected_features = feature_names[selector.support_]
     # Update the training and testing data to only include the $selected_features identified by variance.
-    return apply_selected_features(X_train=X_train, X_test=X_test, selected_features=selected_features)
+    return apply_features(X_train=X_train, X_test=X_test, selected_features=selected_features, verbose=False)
 
 ############
 ### MAIN ###
 ############
-def main(X_train, y_train, X_test, feature_names, configuration_ini):
+def main(X_train, y_train, X_test, feature_names, random_state, configuration_ini):
     # Ensure the $feature_names are of type `Index` from pandas so boolean arrays can be applied.
     feature_names = Index(feature_names)
     # Use VarianceThreshold to remove features that are stagnant or nearly constant.
@@ -152,11 +102,12 @@ def main(X_train, y_train, X_test, feature_names, configuration_ini):
         y_train=y_train,
         X_test=X_test,
         feature_names=X_train.columns,
+        random_state=random_state,
         is_enabled=configuration_ini.getboolean('FEATURE SELECTION', 'ENABLE_RFECV'),
         cross_validation_folds=configuration_ini.getint('ML', 'CROSS_VALIDATION_FOLDS'),
         min_features_to_select=configuration_ini.getint('FEATURE SELECTION', 'RFECV_MIN_FEATURES'),
         scoring=make_scorer(score_func = scoring_metric, **scoring_metric_params),
         step_size=configuration_ini.getfloat('FEATURE SELECTION', 'RFECV_STEP_SIZE')
     )
-    # Return the modified $X_train and $X_test sets along with the list of final $selected_features.
-    return X_train, X_test, selected_features
+    # Return the $selected_features along with the modified $X_train and $X_test sets.
+    return selected_features, X_train, X_test
