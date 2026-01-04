@@ -50,7 +50,7 @@ def apply_selected_features(X_train, X_test, selected_features):
         # If the test set has not been defined, then do nothing.
         pass
     # Display number of selected features.
-    print(f"\tSelected {len(selected_features)} of {total_features} features.")
+    msg_info(f"Selected {len(selected_features)} of {total_features} features.")
     # Return the modified training and testing datasets.
     return X_train, X_test, selected_features
 
@@ -95,7 +95,7 @@ def recursive_feature_elimination(X_train, y_train, X_test, feature_names, is_en
     # Display the scoring metric and specific parameters to stdout.
     msg_info(f"Scoring metric: {scoring}");
     # Initialize the function. 
-    selector = RFECV(estimator = RandomForestClassifier(n_estimators = 25, max_depth = None, random_state = 0), cv = TimeSeriesSplit(n_splits = cross_validation_folds), n_jobs = -1, scoring = scoring)
+    selector = RFECV(estimator = RandomForestClassifier(n_estimators = 250, max_depth = None, random_state = 0), cv = TimeSeriesSplit(n_splits = cross_validation_folds), n_jobs = -1, scoring = scoring, step = 5)
     # Fit and transform the training data.
     selector.fit_transform(X = X_train, y = ravel(y_train))
     # Define the selected features.
