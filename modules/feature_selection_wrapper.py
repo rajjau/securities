@@ -4,7 +4,7 @@ from pandas import concat, DataFrame
 ######################
 ### CUSTOM MODULES ###
 ######################
-from modules.apply_features import main as apply_features
+from modules.add_features import main as add_features
 from modules.border import main as border
 from modules.feature_selection import main as feature_selection
 from modules.messages import msg_info
@@ -41,7 +41,7 @@ def main(X_train, y_train, X_test, columns_x, random_seeds, configuration_ini):
     # Keep only features that are equal to or above the threshold specified within the configuration.ini.
     selected_features = selected_features[selected_features['rate'] >= configuration_ini.getfloat('FEATURE SELECTION', 'SELECTED_FEATURES_THRESHOLD')]
     # Apply the selected features to the training and test sets.
-    X_train, X_test, _ = apply_features(X_train=X_train, X_test=X_test, selected_features=selected_features.index, verbose=True)
+    X_train, X_test, _ = add_features(X_train=X_train, X_test=X_test, selected_features=selected_features.index, verbose=True)
     # Diplay message to stdout regarding selected features.
     msg_info(f"Selected features: {selected_features.index.values}")
     msg_info(f"Kept {len(selected_features)} out of {len(columns_x)} total features.")
