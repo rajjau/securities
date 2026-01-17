@@ -16,7 +16,7 @@
    
    D. **Cleanup:** Ensure the training and testing datasets contain only numeric data (types `int` and `float`) and removes all `NaN` values.
    
-   E. **Normalization:** Fits a scaler (options include **Standard**, **MinMax**, or **Robust**) _only_ on the training data. This fitted scaler is then applied to the test data to prevent "data snooping" or look-ahead bias.
+   E. **Normalization:** Fits a scaler (options include _Standard_, _MinMax_, or _Robust_) onl_ on the training data. This fitted scaler is then applied to the test data to prevent "data snooping" or look-ahead bias.
   
 4. **Feature Selection:** (Optional) Performs one or more of the following feature selection methods. Variance threshold is almost always performed if enabled.
 
@@ -24,7 +24,7 @@
 
    B. **SelectKBest:** Uses Mutual Information to select the top N features that share the most information with the labels, helping to reduce noise.
    
-   C. **Recursive Elimination (RFECV):** Performed using the Decision Tree estimator. It uses a `TimeSeriesSplit` cross-validation strategy to iteratively prune the least important features based on the Matthews Correlation Coefficient (MCC).
+   C. **Recursive Elimination (RFECV):** Performed using the Random Forest estimator. It uses a `TimeSeriesSplit` cross-validation strategy to iteratively prune the least important features based on the Matthews Correlation Coefficient (MCC).
 
 6. **Machine Learning:** Iterates through selected learners (defined in `learners.yaml`) to train a model. This process is performed over 25 random seeds and the final results are an average over all random seeds.
 
