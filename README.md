@@ -16,7 +16,7 @@
    
    D. **Cleanup:** Ensure the training and testing datasets contain only numeric data (types `int` and `float`) and removes all `NaN` values.
    
-   E. **Normalization:** Fits a scaler (options include _Standard_, _MinMax_, or _Robust_) onl_ on the training data. This fitted scaler is then applied to the test data to prevent "data snooping" or look-ahead bias.
+   E. **Normalization:** Fits a scaler (options include _Standard_, _MinMax_, or _Robust_) only on the training data. This fitted scaler is then applied to the test data to prevent "data snooping" or look-ahead bias.
   
 4. **Feature Selection:** (Optional) Performs one or more of the following feature selection methods. Variance threshold is almost always performed if enabled.
 
