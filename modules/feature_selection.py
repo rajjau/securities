@@ -13,7 +13,7 @@ from sklearn.ensemble import RandomForestClassifier
 ######################
 ### CUSTOM MODULES ###
 ######################
-from modules.apply_features import main as apply_features
+from modules.add_features import main as add_features
 from modules.dynamic_module_load import main as dynamic_module_load
 
 #################
@@ -30,7 +30,7 @@ def variance_threshold(X_train, X_test, feature_names, is_enabled, threshold):
     # Define the selected features.
     selected_features = feature_names[selector.get_support()]
     # Update the training and testing data to only include the $selected_features identified by variance.
-    return apply_features(X_train=X_train, X_test=X_test, selected_features=selected_features, verbose=False)
+    return add_features(X_train=X_train, X_test=X_test, selected_features=selected_features, verbose=False)
 
 def select_k_best(X_train, y_train, X_test, feature_names, is_enabled, k):
     """Perform SelectKBest feature selection to select features based on mutual information."""
@@ -45,7 +45,7 @@ def select_k_best(X_train, y_train, X_test, feature_names, is_enabled, k):
     # Convert the ndarray to an Index. This keeps the output type consistent.
     selected_features = Index(selected_features)
     # Update the training and testing data to only include the $selected_features identified by variance.
-    return apply_features(X_train=X_train, X_test=X_test, selected_features=selected_features, verbose=False)
+    return add_features(X_train=X_train, X_test=X_test, selected_features=selected_features, verbose=False)
 
 def recursive_feature_elimination(X_train, y_train, X_test, feature_names, random_state, is_enabled, cross_validation_folds, min_features_to_select, scoring, step_size):
     """Perform Recursive Feature Elimination with Cross-Validation (RFECV) to select features."""
@@ -67,7 +67,7 @@ def recursive_feature_elimination(X_train, y_train, X_test, feature_names, rando
     # Define the selected features.
     selected_features = feature_names[selector.support_]
     # Update the training and testing data to only include the $selected_features identified by variance.
-    return apply_features(X_train=X_train, X_test=X_test, selected_features=selected_features, verbose=False)
+    return add_features(X_train=X_train, X_test=X_test, selected_features=selected_features, verbose=False)
 
 ############
 ### MAIN ###
