@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from argparse import ArgumentParser
+from configparser import ConfigParser
 from datetime import datetime, timedelta
 from pandas import read_csv, to_datetime
 from pathlib import Path
@@ -13,30 +13,27 @@ from PRE_3_features import main as features
 from modules.combine_json import main as combine_json
 from modules.is_file import main as is_file
 from modules.is_dir import main as is_dir
-from modules.messages import msg_info,msg_warn
+from modules.messages import msg_info, msg_warn
+
+################
+### SETTINGS ###
+################
+# Define the root directory, which is the parent directory of this script.
+ROOT = Path(__file__).parent.resolve()
+
+# Path to the configuration INI file.
+CONFIG_INI = Path(ROOT, 'configuration.ini')
 
 #################
 ### FUNCTIONS ###
 #################
-def args():
-    # Create an argument parser.
-    parser = ArgumentParser(description = 'Update the raw stock data and prepare it for machine learning.')
-    # Add the arguments to the parser.
-    parser.add_argument('directory_combined', type = Path, help = 'Directory containing the combined datasets to continue off from (e.g., "raw_combined").')
-    parser.add_argument('directory_raw', type = Path, help = 'Directory containing all raw data from the source (e.g., "raw").')
-    parser.add_argument('--output', type = Path, default = None, help = 'Filename to save the final prepared data to. This is the data that will be used for machine learning. Default: data_<yesterday_date>.parquet')
-    # Parse the arguments.
-    arguments = parser.parse_args()
-    # Check if the output filename was provided, otherwise set it to a default value.
-    if not arguments.output:
-        # Obtain yesterday's date and format it.
-        yesterday = datetime.today() - timedelta(days = 1)
-        # Define the output filename using yesterday's date (in YYYY-MM-DD format).
-        arguments.output = Path(f"data_{yesterday.strftime('%Y-%m-%d')}.parquet").absolute()
-        # Display a warning message to user that the default filename will be used.
-        msg_warn(f"(OPTIONAL) --output: Filename to save the final prepared data to. Default: {arguments.output}")
-    # Return the user-defined variables.
-    return arguments.directory_combined.absolute(), arguments.directory_raw.absolute(), arguments.output.absolute()
+def define_directory_output():
+    # Obtain yesterday's date and format it.
+    yesterday = datetime.today() - timedelta(days = 1)
+    # Define the output filename using yesterday's date (in YYYY-MM-DD format).
+    directory_output = Path(f"data_{yesterday.strftime('%Y-%m-%d')}").absolute()
+    # Return the output filename.
+    return directory_output
 
 def get_final_timestamp(filename):
     # Read the data from the file.
@@ -67,7 +64,7 @@ def days(last):
         # Otherwise, return a tuple of the last date and today's date in YYYY-MM-DD format.
         return (last.strftime('%Y-%m-%d'), today.strftime('%Y-%m-%d'))
 
-def update(dir_data, filename_last, dates, filename_raw_csv, filename_features_csv):
+def update(dir_data, filename_last, dates, filename_raw_csv, directory_output):
     # Download all new data to their respective JSON files, which is returned as a list.
     filenames_json = download(dir_data=dir_data, dates=dates)
     # Check if the list of JSON files has entries.
@@ -79,9 +76,9 @@ def update(dir_data, filename_last, dates, filename_raw_csv, filename_features_c
         # Display informational message to stdout.
         msg_info(f"Done. Combined raw data written to the output file: '{filename_raw_csv}'")
         # Add features.
-        features(filename = filename_raw_csv, filename_output = filename_features_csv)
+        features(filename=filename_raw_csv, directory_output=directory_output)
         # Display informational message to stdout.
-        msg_info(f"Done. Final data to use for machine learning written to the output file: '{filename_features_csv}'")
+        msg_info(f"Done. Final data to use for machine learning written to the output directory: '{directory_output}'")
     else:
         # If there was no new JSON files downloaded, display a warning message to stdout.
         msg_warn(f"There was no data available to download. This can happen due to API limits or the market has not closed yet for the day. Please try again later.")
@@ -89,7 +86,17 @@ def update(dir_data, filename_last, dates, filename_raw_csv, filename_features_c
 ############
 ### MAIN ###
 ############
-def main(dir_combined, dir_raw, filename_output):
+def main():
+    # Verify the configuration file exists.
+    is_file(CONFIG_INI, exit_on_error=True)
+    # Initiate the configuration parser.
+    configuration_ini = ConfigParser()
+    # Read the configuration INI file.
+    configuration_ini.read(CONFIG_INI)
+    # Define the directory that contains the raw combined data.
+    dir_combined = Path(configuration_ini['GENERAL']['DATA_RAW_COMBINED_DIRECTORY']).resolve()
+    # Define the directory that contains the raw data.
+    dir_raw = Path(configuration_ini['GENERAL']['DATA_RAW_DIRECTORY']).resolve()
     # Ensure the specified directories are valid.
     is_dir(directory=dir_combined, exit_on_error=True)
     is_dir(directory=dir_raw, exit_on_error=True)
@@ -113,14 +120,12 @@ def main(dir_combined, dir_raw, filename_output):
             filename_last=filename_last,
             dates=dates,
             filename_raw_csv=filename_raw_csv,
-            filename_features_csv=filename_output
+            directory_output=define_directory_output()
         )
 
 #############
 ### START ###
 #############
 if __name__ == '__main__':
-    # Obtain user-defined variables.
-    directory_combined, directory_raw, filename_output = args()
     # Start the main function.
-    main(dir_combined=directory_combined, dir_raw=directory_raw, filename_output=filename_output)
+    main()
