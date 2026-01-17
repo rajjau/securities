@@ -73,15 +73,13 @@ def main(filename):
     #------------#
     #--- Data ---#
     #------------#
-    # Define the symbols to process.
-    symbols = convert_to_list(string=configuration_ini['DATA']['SYMBOLS'], delimiter=',')
+    # Extract the symbol(s) from the input filename.
+    symbols = filename.stem
     # Define the label column(s) (y).
     columns_y = convert_to_list(string=configuration_ini['DATA']['COLUMNS_Y'], delimiter=',')
     # Import and preprocess data for ML.
     data, columns_x = import_and_parse(
         filename=filename,
-        symbols=symbols,
-        cache_directory=Path(ROOT, configuration_ini['GENERAL']['CACHE_DIRECTORY']).absolute(),
         columns_x=convert_to_list(string=configuration_ini['DATA']['COLUMNS_X'], delimiter=','),
         columns_y=columns_y
     )
