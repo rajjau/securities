@@ -40,12 +40,6 @@ def args():
     # Return the filename and symbols.
     return args.filename.absolute()
 
-def calculate_baseline_accuracy(counts):
-    """Calculate the baseline accuracy, which is the number of entries within the largest class divided by the total entries across all classes."""
-    baseline_accuracy = counts.max() / counts.sum()
-    # Display the baseline accuracy to stdout.
-    msg_info(f"Num. of Class 0: {counts[0.0]} | Num. of Class 1: {counts[1.0]} | Baseline: {baseline_accuracy:.2%}")
-
 ############
 ### MAIN ###
 ############
