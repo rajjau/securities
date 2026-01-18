@@ -12,9 +12,9 @@ from yaml import safe_load
 ######################
 ### CUSTOM MODULES ###
 ######################
-from modules.date_and_time import main as date_and_time
 from modules.dynamic_module_load import main as dynamic_module_load
 from modules.messages import msg_info,msg_warn
+from modules.save_to_filename import main as save_to_filename
 
 ################
 ### WARNINGS ###
@@ -172,26 +172,15 @@ def train_predict_rolling(model, X_train, y_train, X_test, y_test, retrain_step_
     # Return the $score.
     return score
 
-def saved_model_filename(name, symbols, random_state):
-    """Define the output filename for saving the trained model to."""
-    # Define today's date and time for the filename.
-    timestamp = date_and_time(n_days_ago = 1, include_time = True).replace(' ', '_').replace(':', '')
-    # Prepare the learner name for the filename.
-    name = name.replace(' ', '_')
-    # Build the filename using symbols (if provided) or 'all'.
-    filename = f"{name}_{symbols}_{timestamp}_seed{random_state}.joblib"
-    # Use `pathlib` to return the absolute path.
-    return Path(filename).absolute()
-
-def save(saved_model, model, score, save_threshold):
+def save(saved_model, model, score, save_threshold, is_production):
     # Check if saving is enabled and threshold is met.
-    if save_threshold == -1: return None
-    # Check if the $score is Nonetype, meaning the model is being trained on the entire training set, or if it's greater than or equal to the specified save threshold.
-    if (score is None) or (score >= save_threshold):
+    if (save_threshold == -1) and (is_production is False): return None
+    # Check if the $score is Nonetype, meaning the model is being trained on the entire training set, OR if it's greater than or equal to the specified save threshold, OR if the current run is a production run.
+    if (score is None) or (score >= save_threshold) or (is_production is True):
         # Save the model object.
         dump(model, filename = saved_model)
         # Message to stdout.
-        msg_info(f"The model has been saved to: {saved_model}")
+        msg_info(f"SAVED: Trained model saved to: {saved_model}")
 
 ############
 ### MAIN ###
@@ -246,8 +235,15 @@ def main(X_train, y_train, X_test, y_test, name, symbols, random_state, configur
         # Set the $score to Nonetype since there will be no prediction on the test set, as it doesn't exist.
         score = None
     # Generate the filename for saving the model to an output file.
-    saved_model = saved_model_filename(name=name, symbols=symbols, random_state=random_state)
+    saved_model = save_to_filename(
+        dir_data_saved=Path(configuration_ini.get('GENERAL', 'DATA_SAVED_DIRECTORY')).resolve(),
+        name=f"Model_{name}",
+        symbols=symbols,
+        extension='joblib',
+        random_state=random_state,
+        timestamp=False
+    )
     # Save the model if performance requirements are met.
-    save(saved_model=saved_model, model=model, score=score, save_threshold=configuration_ini.getfloat('ML', 'SAVE_THRESHOLD'))
+    save(saved_model=saved_model, model=model, score=score, save_threshold=configuration_ini.getfloat('ML', 'SAVE_THRESHOLD'), is_production=configuration_ini.getboolean('GENERAL', 'IS_PRODUCTION'))
     # Return the scores.
     return score, score_cv, score_cv_stddev
