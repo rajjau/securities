@@ -15,8 +15,8 @@ from modules.train_test_split import main as train_test_split
 ################
 ### SETTINGS ###
 ################
-# Define the root directory, which is the parent directory of this script.
-ROOT = Path(__file__).parent.resolve()
+# Define the root directory, which is one level up from this script.
+ROOT = Path(__file__).parent.parent.resolve()
 
 # Path to the configuration INI file.
 CONFIG_INI = Path(ROOT, 'configuration.ini')
