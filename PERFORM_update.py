@@ -97,8 +97,6 @@ def main():
     dir_combined = Path(configuration_ini['GENERAL']['DATA_RAW_COMBINED_DIRECTORY']).resolve()
     # Define the directory that contains the raw data.
     dir_raw = Path(configuration_ini['GENERAL']['DATA_RAW_DIRECTORY']).resolve()
-    print(dir_combined)
-    exit()
     # Ensure the specified directories are valid.
     is_dir(directory=dir_combined, exit_on_error=True)
     is_dir(directory=dir_raw, exit_on_error=True)
