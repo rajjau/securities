@@ -27,11 +27,11 @@ CONFIG_INI = Path(ROOT, 'configuration.ini')
 #################
 ### FUNCTIONS ###
 #################
-def define_directory_output():
+def define_directory_output(dir_local_data):
     # Obtain yesterday's date and format it.
     yesterday = datetime.today() - timedelta(days = 1)
     # Define the output filename using yesterday's date (in YYYY-MM-DD format).
-    directory_output = Path(f"data_{yesterday.strftime('%Y-%m-%d')}").absolute()
+    directory_output = Path(dir_local_data, f"DATA_FOR_ML_{yesterday.strftime('%Y-%m-%d')}").absolute()
     # Return the output filename.
     return directory_output
 
@@ -93,6 +93,8 @@ def main():
     configuration_ini = ConfigParser(interpolation = ExtendedInterpolation())
     # Read the configuration INI file.
     configuration_ini.read(CONFIG_INI)
+    # Define the directory that contains all local data.
+    dir_local_data = Path(configuration_ini['GENERAL']['DATA_LOCAL']).resolve()
     # Define the directory that contains the raw combined data.
     dir_combined = Path(configuration_ini['GENERAL']['DATA_RAW_COMBINED_DIRECTORY']).resolve()
     # Define the directory that contains the raw data.
@@ -120,7 +122,7 @@ def main():
             filename_last=filename_last,
             dates=dates,
             filename_raw_csv=filename_raw_csv,
-            directory_output=define_directory_output()
+            directory_output=define_directory_output(dir_local_data=dir_local_data)
         )
 
 #############
