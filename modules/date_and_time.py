@@ -11,6 +11,9 @@ def main(n_days_ago = 0, include_time = False):
     if n_days_ago > 0:
         # If so, then subtract the number of days from the current date
         date = timestamp - timedelta(days = n_days_ago)
+    else:
+        # Otherwise, set the date variable to be the current timestamp.
+        date = timestamp
     # Check if the time was set to be included or not.
     if include_time is False:
         # Define only the YYYY-MM-DD.
