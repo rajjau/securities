@@ -7,13 +7,12 @@ from pathlib import Path
 ### CUSTOM MODULES ###
 ######################
 from modules.border import main as border
-from modules.feature_selection_wrapper import main as feature_selection_wrapper
 from modules.calculate_results import main as calculate_results
-from modules.import_and_parse import main as import_and_parse
+from modules.convert_to_list import main as convert_to_list
 from modules.is_file import main as is_file
 from modules.machine_learning import main as machine_learning
 from modules.messages import msg_info
-from modules.train_test_split import main as train_test_split
+from modules.preprocessing import main as preprocessing
 
 ################
 ### SETTINGS ###
@@ -26,9 +25,6 @@ CONFIG_INI = Path(ROOT, 'configuration.ini')
 
 # Path to the YAML file containing all learners.
 LEARNERS_YAML = Path(ROOT, 'learners.yaml')
-
-# Define columns that represent the "future" or "result" of the current bar. Keep 'o' (Open) because it is known at the start of the trade.
-LEAKY_COLUMNS = ['c', 'h', 'l', 'v', 'n', 'vw']
 
 #################
 ### FUNCTIONS ###
@@ -43,10 +39,6 @@ def args():
     args = parser.parse_args()
     # Return the filename and symbols.
     return args.filename.absolute()
-
-def convert_to_list(string, delimiter):
-    """Split a string representation of a list into an actual list based on the provided $delimiter."""
-    return [item.strip() for item in string.split(delimiter)]
 
 def calculate_baseline_accuracy(counts):
     """Calculate the baseline accuracy, which is the number of entries within the largest class divided by the total entries across all classes."""
@@ -70,59 +62,14 @@ def main(filename):
     configuration_ini = ConfigParser()
     # Read the configuration INI file.
     configuration_ini.read(CONFIG_INI)
-    #------------#
-    #--- Data ---#
-    #------------#
-    # Extract the symbol(s) from the input filename.
-    symbols = filename.stem
-    # Define the label column(s) (y).
-    columns_y = convert_to_list(string=configuration_ini['DATA']['COLUMNS_Y'], delimiter=',')
-    # Import and preprocess data for ML.
-    data, columns_x = import_and_parse(
-        filename=filename,
-        columns_x=convert_to_list(string=configuration_ini['DATA']['COLUMNS_X'], delimiter=','),
-        columns_y=columns_y
-    )
-    # Calculate the baseline accuracy and display it to stdout.
-    calculate_baseline_accuracy(data[columns_y].value_counts())
-    # Everything below this point assumes that the data has been successfully imported and preprocessed. The cache is now available for future runs.
-    #----------------#
-    #--- Cleaning ---#
-    #----------------#
-    # Filter columns_x to remove leakage while keeping lagged features and 'o'.
-    columns_x = [col for col in columns_x if col not in LEAKY_COLUMNS]
-    # Message to stdout to confirm cleaning.
-    msg_info(f"Removed leaky features: {LEAKY_COLUMNS}")
-    #------------------------#
-    #--- Train/Test Split ---#
-    #------------------------#
-    # Split the data into training and testing datasets.
-    X_train, X_test, y_train, y_test, columns_x = train_test_split(
-        data=data,
-        columns_x=columns_x,
-        columns_y=columns_y,
-        columns_one_hot_encoding=convert_to_list(string=configuration_ini['DATA']['COLUMNS_ONE_HOT_ENCODING'], delimiter=','),
-        holdout_days=configuration_ini.getint('DATA', 'HOLDOUT_DAYS'),
-        normalize_X=True,
-        normalize_method=configuration_ini['NORMALIZATION']['NORMALIZE_METHOD']
-    )
-    #----------------------#
-    #--- Random Seed(s) ---#
-    #----------------------#
+    #---------------------#
+    #--- Preprocessing ---#
+    #---------------------#
+    X_train, X_test, y_train, y_test = preprocessing(filename=filename)
     # Define the random seed(s).
     random_seeds = [int(item) for item in convert_to_list(string=configuration_ini['GENERAL']['RANDOM_SEED'], delimiter=',')]
-    #-------------------------#
-    #--- Feature Selection ---#
-    #-------------------------#
-    # Perform feature selection.
-    X_train, X_test = feature_selection_wrapper(
-        X_train=X_train,
-        y_train=y_train,
-        X_test=X_test,
-        columns_x=columns_x,
-        random_seeds=random_seeds,
-        configuration_ini=configuration_ini
-    )
+    # Extract the symbol(s) from the input filename.
+    symbols = filename.stem
     #------------------------#
     #--- Machine Learning ---#
     #------------------------#
