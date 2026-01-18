@@ -1,162 +1,212 @@
 #!/usr/bin/env python
-from numpy import abs, where, sin, cos, pi
+from numpy import abs, divide, where, sin, cos, ones_like, pi
 from pandas import concat, DataFrame, to_datetime
 
 ######################
 ### CUSTOM MODULES ###
 ######################
+# Import custom messaging module for stdout info.
 from modules.messages import msg_info
 
 ################
 ### SETTINGS ###
 ################
+# Set the maximum number of days for historical lag features.
 LAGGED_MAX_DAYS = 15
+
+# Define the lookback windows for moving averages and technical indicators.
 MOVING_AVERAGE_WINDOWS = [5, 10, 15, 20, 50]
 
 #################
 ### FUNCTIONS ###
 #################
 def open_to_close(data):
-    # Display informational message to stdout.
-    msg_info('Feature: Adding opening to close value descriptions.')
-    # All instances where the closing value is greater than the opening value.
+    # Display informational message regarding target creation to stdout.
+    msg_info('Target: Adding binary classification target.')
+    # Create a binary column: 1 if closing price is higher than opening price, else 0.
     data['close_greater_than_open'] = (data['c'] > data['o']).astype('int32')
-    # Return the $data with the new column.
+    # Return the modified dataframe with the target label.
     return data
 
 class FeatureEngineering:
     def __init__(self, data):
-        # Make data a class variable.
+        # Assign the input dataframe to the class instance.
         self.data = data
-        # Create the grouped object once to be shared across functions.
-        self.grouped = data.groupby('T')
-        # Shifting via group to prevent look-ahead bias.
+        # Group data by ticker symbol and ensure categorical order is observed.
+        self.grouped = data.groupby('T', observed=True)
+        # Calculate yesterday's closing price per group.
         self.prev_close = self.grouped['c'].shift(1).astype('float32')
+        # Calculate yesterday's opening price per group.
         self.prev_open = self.grouped['o'].shift(1).astype('float32')
+        # Calculate yesterday's trading volume per group.
         self.prev_volume = self.grouped['v'].shift(1).astype('float32')
+        # Calculate yesterday's high price per group.
         self.prev_high = self.grouped['h'].shift(1).astype('float32')
+        # Calculate yesterday's low price per group.
         self.prev_low = self.grouped['l'].shift(1).astype('float32')
-        # Dictionary to hold all new columns.
+        # Initialize a dictionary to store newly generated feature columns.
         self.new_columns = {}
-        # Add new engineered features.
+        # Call function to generate time-based cyclical features.
         self.add_time_and_date_features()
+        # Call function to generate overnight price gap features.
         self.add_overnight_features()
+        # Call function to generate historical price/volume lags.
         self.add_lagged_features()
+        # Call function to generate technical indicator distances.
         self.add_technical_indicators()
+        # Call function to generate candlestick pattern descriptions.
         self.add_candlestick_features()
+        # Call function to generate volume/price interaction features.
         self.add_interaction_features()
-        # Join the new features to the original $data.
+        # Merge the new feature dictionary into a dataframe and join with original data.
         self.data = concat([self.data, DataFrame(self.new_columns, index = self.data.index)], axis = 1)
-        # De-fragment the DataFrame after a large concatenation to maintain performance.
+        # Create a copy of the dataframe to resolve fragmentation and consolidate memory.
         self.data = self.data.copy()
 
     def __call__(self):
-        # Return the modified $data
+        # Return the fully engineered dataframe when the class is called.
         return(self.data)
     
     def add_time_and_date_features(self):
         # Display informational message to stdout.
         msg_info("Feature: Calculating time and date features.")
-        # Convert timestamps to datetime.
+        # Convert the 't' column from milliseconds to pandas datetime objects.
         timestamps = to_datetime(self.data['t'], unit = 'ms')
-        # Obtain the date only (setting time to 00:00:00).
-        self.new_columns['t_d'] = timestamps.dt.normalize().astype('datetime64[s]')
-        # Days and months related features.
-        self.new_columns['day_of_week'] = timestamps.dt.day_name().astype('category')
-        self.new_columns['day_of_month'] = timestamps.dt.day.astype('int32')
-        self.new_columns['month'] = timestamps.dt.month.astype('int32')
-        self.new_columns['quarter'] = timestamps.dt.quarter.astype('int32')
-        self.new_columns['is_month_end'] = timestamps.dt.is_month_end.astype('int32')
-        # Cyclical encoding using vectorized numpy functions.
-        day_of_week_idx = timestamps.dt.dayofweek
+        # Extract and store the normalized date (midnight) for each record.
+        self.new_columns['t_d'] = timestamps.dt.normalize().values
+        # Extract the day of the month as an integer.
+        self.new_columns['day_of_month'] = timestamps.dt.day.astype('int32').values
+        # Extract the month of the year as an integer.
+        self.new_columns['month'] = timestamps.dt.month.astype('int32').values
+        # Extract the fiscal quarter as an integer.
+        self.new_columns['quarter'] = timestamps.dt.quarter.astype('int32').values
+        # Create a binary flag for the last day of the month.
+        self.new_columns['is_month_end'] = timestamps.dt.is_month_end.astype('int32').values
+        # Convert day of week to an index for cyclical encoding.
+        day_of_week_idx = timestamps.dt.dayofweek.values
+        # Calculate sine component for the weekly cycle.
         self.new_columns['dow_sin'] = sin(2 * pi * day_of_week_idx / 7).astype('float32')
+        # Calculate cosine component for the weekly cycle.
         self.new_columns['dow_cos'] = cos(2 * pi * day_of_week_idx / 7).astype('float32')
-        # Cyclical encoding for day of month.
-        days_in_month = timestamps.dt.days_in_month
-        self.new_columns['dom_sin'] = sin(2 * pi * self.new_columns['day_of_month'] / days_in_month).astype('float32')
-        self.new_columns['dom_cos'] = cos(2 * pi * self.new_columns['day_of_month'] / days_in_month).astype('float32')
+        # Get the number of days in the specific month for normalization.
+        dim = timestamps.dt.days_in_month.values
+        # Calculate sine component for the monthly cycle.
+        self.new_columns['dom_sin'] = sin(2 * pi * self.new_columns['day_of_month'] / dim).astype('float32')
+        # Calculate cosine component for the monthly cycle.
+        self.new_columns['dom_cos'] = cos(2 * pi * self.new_columns['day_of_month'] / dim).astype('float32')
 
     def add_overnight_features(self):
         # Display informational message to stdout.
-        msg_info('Feature: Calculating overnight gap and momentum features.')
-        # Use vectorized 'where' to handle division by zero.
-        self.new_columns['overnight_gap'] = where(self.prev_close != 0, (self.data['o'] - self.prev_close) / self.prev_close, 0).astype('float32')
-        # Calculate Lagged Gap: Wrap the 1D gap array, group by ticker, shift, and extract 1D values.
-        self.new_columns['lagged_overnight_gap_1'] = DataFrame(self.new_columns['overnight_gap']).groupby(self.data['T'])[0].shift(1).values
-        # Significant Gap Flag: Binary indicator for gaps greater than 0.5% using numpy's absolute function.
+        msg_info('Feature: Calculating overnight gap features.')
+        # Retrieve yesterday's closing prices as a numpy array.
+        p_close = self.prev_close.values
+        # Retrieve today's opening prices as a numpy array.
+        curr_open = self.data['o'].values
+        # Compute the percentage difference between yesterday's close and today's open.
+        self.new_columns['overnight_gap'] = divide(
+            curr_open - p_close,
+            p_close,
+            out=ones_like(p_close) * 0,
+            where=p_close!=0
+        ).astype('float32')
+        # Create a 1-day lag of the overnight gap to see how the stock gapped yesterday.
+        self.new_columns['lagged_overnight_gap_1'] = DataFrame(self.new_columns['overnight_gap']).groupby(self.data['T'])[0].shift(1).values.flatten()
+        # Generate a binary flag if the price gap is greater than 0.5%.
         self.new_columns['is_significant_gap'] = (abs(self.new_columns['overnight_gap']) > 0.005).astype('int32')
 
     def add_lagged_features(self):
         # Display informational message to stdout.
-        msg_info('Feature: Calculating lagged columns and derived lagged features.')
-        # Define core columns to lag.
-        core_columns = ['c', 'h', 'l', 'n', 'o', 'v', 'vw']
-        # Add lagged day of week using shift to respect actual trading history.
-        self.new_columns['lagged_day_of_week'] = self.new_columns['day_of_week'].shift(1)
-        # Generate lagged OHLCV blocks and derived features.
+        msg_info('Feature: Calculating relative lagged columns.')
+        # Define lists of price-based and quantity-based columns.
+        price_cols, other_cols = ['c', 'h', 'l', 'o', 'vw'], ['n', 'v']
+        # Iterate through each day in the LAGGED_MAX_DAYS setting.
         for i in range(1, LAGGED_MAX_DAYS + 1):
-            # Shift the core OHLCV data by $i trading days within each symbol group.
-            lagged_df = self.grouped[core_columns].shift(i)
-            # Rename the columns to include the lag index $i to ensure unique names and clear lineage.
-            lagged_df.columns = [f"lagged_{col}_{i}" for col in core_columns]
-            # Add each column to the dictionary.
-            for col in lagged_df.columns: self.new_columns[col] = lagged_df[col].astype('float32')
-            # Compute derived lagged features.
-            self.new_columns[f"lagged_high_low_spread_{i}"] = (lagged_df[f"lagged_h_{i}"] - lagged_df[f"lagged_l_{i}"]).astype('float32')
-            # Compute daily return with zero-division protection.
-            self.new_columns[f"lagged_daily_return_{i}"] = where(lagged_df[f"lagged_o_{i}"] != 0, (lagged_df[f"lagged_c_{i}"] - lagged_df[f"lagged_o_{i}"]) / lagged_df[f"lagged_o_{i}"], 0).astype('float32')
+            # Shift the grouped data by the current lag amount.
+            lag_base = self.grouped[price_cols + other_cols].shift(i)
+            # Process each price column to calculate percentage change from history.
+            for col in price_cols:
+                # Get the raw values for the lagged data.
+                l_val = lag_base[col].values
+                # Use yesterday's value (shift 1) as the baseline to avoid current-row leakage.
+                p_val = self.prev_close.values if col == 'c' else self.grouped[col].shift(1).values
+                # Divide the difference by the lagged value to get the return.
+                self.new_columns[f"lag_{col}_{i}"] = divide((p_val - l_val), l_val, out=ones_like(l_val)*0, where=l_val!=0).astype('float32')
+            # Process each non-price column (volume, trade count) for growth rates.
+            for col in other_cols:
+                # Get the historical values for the lag.
+                l_val = lag_base[col].values
+                # Get yesterday's values as the baseline.
+                p_val = self.grouped[col].shift(1).values
+                # Calculate the percentage growth in volume or count.
+                self.new_columns[f"lag_{col}_{i}"] = divide((p_val - l_val), l_val, out=ones_like(l_val)*0, where=l_val!=0).astype('float32')
 
     def add_technical_indicators(self):
         # Display informational message to stdout.
         msg_info('Feature: Calculating technical indicators.')
-        # Calculate the percentage change of the closing price within each symbol group.
-        returns = self.grouped['c'].pct_change()
-        # Compute all window-based indicators.
+        # Store yesterday's close in a local variable for calculation.
+        p_close = self.prev_close.values
+        # Loop through each window size defined in the settings.
         for window in MOVING_AVERAGE_WINDOWS:
-            # Simple Moving Average (SMA) Distance.
-            sma_val = self.grouped['c'].transform(lambda entry: entry.rolling(window).mean()).shift(1).astype('float32')
-            self.new_columns[f"dist_from_sma_{window}"] = where(sma_val != 0, (self.prev_close - sma_val) / sma_val, 0).astype('float32')
-            # Exponential Moving Average (EMA) Distance.
-            ema_val = self.grouped['c'].transform(lambda entry: entry.ewm(span=window, adjust = False).mean()).shift(1).astype('float32')
-            self.new_columns[f"dist_from_ema_{window}"] = where(ema_val != 0, (self.prev_close - ema_val) / ema_val, 0).astype('float32')
-            # Rate of Change (ROC).
-            prev_window_c = self.grouped['c'].shift(window + 1).astype('float32')
-            self.new_columns[f"roc_{window}"] = where(prev_window_c != 0, (self.prev_close - prev_window_c) / prev_window_c, 0).astype('float32')
-            # Volatility (Standard Deviation of daily returns).
-            self.new_columns[f"volatility_{window}"] = returns.groupby(self.data['T']).rolling(window).std().reset_index(level = 0, drop = True).shift(1).astype('float32')
-            # Normalized Rolling Range.
-            rolling_max = self.grouped['c'].transform(lambda entry: entry.rolling(window).max()).shift(1).astype('float32')
-            rolling_min = self.grouped['c'].transform(lambda entry: entry.rolling(window).min()).shift(1).astype('float32')
-            self.new_columns[f"norm_range_{window}"] = where(sma_val != 0, (rolling_max - rolling_min) / sma_val, 0).astype('float32')
+            # Calculate the rolling mean of the closing price and shift it to yesterday.
+            sma_val = self.grouped['c'].transform(lambda x: x.rolling(window).mean()).shift(1).values
+            # Compute the distance of yesterday's close from the SMA.
+            self.new_columns[f"dist_sma_{window}"] = divide((p_close - sma_val), sma_val, out=ones_like(sma_val)*0, where=sma_val!=0).astype('float32')
+            # Calculate the exponential moving average and shift it to yesterday.
+            ema_val = self.grouped['c'].transform(lambda x: x.ewm(span=window, adjust=False).mean()).shift(1).values
+            # Compute the distance of yesterday's close from the EMA.
+            self.new_columns[f"dist_ema_{window}"] = divide((p_close - ema_val), ema_val, out=ones_like(ema_val)*0, where=ema_val!=0).astype('float32')
+            # Shift the price by the window size plus one to find the historical anchor.
+            p_win_c = self.grouped['c'].shift(window + 1).values
+            # Calculate the Rate of Change relative to that historical anchor.
+            self.new_columns[f"roc_{window}"] = divide((p_close - p_win_c), p_win_c, out=ones_like(p_win_c)*0, where=p_win_c!=0).astype('float32')
+            # Calculate the rolling standard deviation of percentage changes for volatility.
+            self.new_columns[f"vol_{window}"] = self.grouped['c'].transform(lambda x: x.pct_change().rolling(window).std()).shift(1).values.flatten()
 
     def add_candlestick_features(self):
         # Display informational message to stdout.
         msg_info('Feature: Calculating candlestick features.')
-        # Compute features.
-        self.new_columns['candle_body'] = (self.prev_close - self.prev_open).abs().astype('float32')
-        self.new_columns['upper_shadow'] = self.prev_high - concat([self.prev_close, self.prev_open], axis = 1).max(axis = 1).astype('float32')
-        self.new_columns['lower_shadow'] = (concat([self.prev_close, self.prev_open], axis = 1).min(axis = 1) - self.prev_low).astype('float32')
-        # Relative body size with zero-division check.
-        total_range = (self.prev_high - self.prev_low).astype('float32')
-        self.new_columns['relative_body'] = where(total_range != 0, self.new_columns['candle_body'] / total_range, 0).astype('float32')
+        # Assign shifted OHLC values to local variables representing yesterday's candle.
+        p_c, p_o, p_h, p_l = self.prev_close.values, self.prev_open.values, self.prev_high.values, self.prev_low.values
+        # Determine the absolute height of the candle body (open to close).
+        self.new_columns['yest_body'] = abs(p_c - p_o).astype('float32')
+        # Calculate the size of the upper shadow (wick).
+        self.new_columns['yest_upper_shadow'] = (p_h - where(p_c > p_o, p_c, p_o)).astype('float32')
+        # Calculate the size of the lower shadow (wick).
+        self.new_columns['yest_lower_shadow'] = (where(p_c < p_o, p_c, p_o) - p_l).astype('float32')
+        # Calculate the total vertical range of the candle.
+        t_range = (p_h - p_l)
+        # Normalize the body size by dividing it by the total candle range.
+        self.new_columns['yest_rel_body'] = divide(self.new_columns['yest_body'], t_range, out=ones_like(t_range)*0, where=t_range!=0).astype('float32')
 
     def add_interaction_features(self):
         # Display informational message to stdout.
-        msg_info('Feature: Calculating interaction features.')
-        # Calculations.
-        self.new_columns['close_volume'] = (self.prev_close * self.prev_volume).astype('float32')
-        self.new_columns['return_volume'] = where(self.prev_open != 0, ((self.prev_close - self.prev_open) / self.prev_open) * self.prev_volume, 0).astype('float32')
-        self.new_columns['spread_volume'] = ((self.prev_high - self.prev_low) * self.prev_volume).astype('float32')
+        msg_info('Feature: Calculating relative interaction features.')
+        # Load yesterday's OHLCV values into local variables.
+        p_c, p_v, p_o, p_h, p_l = self.prev_close.values, self.prev_volume.values, self.prev_open.values, self.prev_high.values, self.prev_low.values
+        # Compute the dollar volume traded yesterday.
+        dollar_vol_prev = p_c * p_v
+        # Iterate through the window sizes to define relative intensity.
+        for window in MOVING_AVERAGE_WINDOWS:
+            # Calculate the rolling average dollar volume and shift it to yesterday.
+            avg_dollar_vol = self.grouped.apply(lambda x: (x['c'] * x['v']).rolling(window).mean(), include_groups=False).reset_index(level=0, drop=True).shift(1).fillna(0).values.flatten()
+            # Calculate how yesterday's volume compared to the historical average.
+            rel_vol = divide(dollar_vol_prev, avg_dollar_vol, out=ones_like(avg_dollar_vol)*1.0, where=avg_dollar_vol!=0).astype('float32')
+            # Store the relative dollar volume feature.
+            self.new_columns[f'rel_dollar_vol_{window}'] = rel_vol
+            # Calculate yesterday's simple return.
+            p_ret = divide((p_c - p_o), p_o, out=ones_like(p_o)*0, where=p_o!=0)
+            # Combine price move with volume intensity to create an "intensity" feature.
+            self.new_columns[f'ret_vol_intensity_{window}'] = (p_ret * rel_vol).astype('float32')
 
 ############
 ### MAIN ###
 ############
 def main(data):
-    # Sort data by symbol and time once at the start.
+    # Sort the dataframe by ticker and time to ensure sequential integrity.
     data = data.sort_values(by=['T', 't']).reset_index(drop = True)
-    # Add feature if the closing price is greater than the opening price (no = 0; yes = 1).
-    data = open_to_close(data=data)
-    # Run feature engineering pipeline.
+    # Instantiate and run the FeatureEngineering class to generate historical predictors.
     data = FeatureEngineering(data=data)()
-    # Return the modified $data.
+    # Append the target variable based on the current row's outcome.
+    data = open_to_close(data=data)
+    # Return the final dataframe ready for machine learning training.
     return data
