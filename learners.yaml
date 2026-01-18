@@ -48,6 +48,7 @@ LEARNERS:
     class: sklearn.ensemble.RandomForestClassifier
     params:
       n_jobs: -1
+      n_estimators: 250
     optimization:
       bootstrap: [True, False]
       class_weight: [balanced, balanced_subsample]
@@ -55,7 +56,7 @@ LEARNERS:
       max_depth: [3, 5, 10, 20, 50, 100, null]
       max_features: [log2, sqrt, null]
       max_leaf_nodes: [10, 100, null]
-      n_estimators: [25, 50, 100, 200, 250]
+      min_samples_leaf: [1, 10, 20, 50]
 
   Ridge CV:
     class: sklearn.linear_model.RidgeClassifierCV
