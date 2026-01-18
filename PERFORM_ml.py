@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 from argparse import ArgumentParser
-from configparser import ConfigParser
+from configparser import ConfigParser, ExtendedInterpolation
 from pathlib import Path
 
 ######################
@@ -59,7 +59,7 @@ def main(filename):
     # Verify the learners YAML file exists.
     is_file(LEARNERS_YAML, exit_on_error=True)
     # Initiate the configuration parser.
-    configuration_ini = ConfigParser()
+    configuration_ini = ConfigParser(interpolation = ExtendedInterpolation())
     # Read the configuration INI file.
     configuration_ini.read(CONFIG_INI)
     #---------------------#

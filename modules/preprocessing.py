@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from configparser import ConfigParser
+from configparser import ConfigParser, ExtendedInterpolation
 from pathlib import Path
 
 ######################
@@ -35,7 +35,7 @@ def main(filename):
     # Verify the configuration file exists.
     is_file(CONFIG_INI, exit_on_error=True)
     # Initiate the configuration parser.
-    configuration_ini = ConfigParser()
+    configuration_ini = ConfigParser(interpolation = ExtendedInterpolation())
     # Read the configuration INI file.
     configuration_ini.read(CONFIG_INI)
     #------------#

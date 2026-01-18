@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from configparser import ConfigParser
+from configparser import ConfigParser, ExtendedInterpolation
 from datetime import datetime, timedelta
 from pandas import read_csv, to_datetime
 from pathlib import Path
@@ -90,13 +90,15 @@ def main():
     # Verify the configuration file exists.
     is_file(CONFIG_INI, exit_on_error=True)
     # Initiate the configuration parser.
-    configuration_ini = ConfigParser()
+    configuration_ini = ConfigParser(interpolation = ExtendedInterpolation())
     # Read the configuration INI file.
     configuration_ini.read(CONFIG_INI)
     # Define the directory that contains the raw combined data.
     dir_combined = Path(configuration_ini['GENERAL']['DATA_RAW_COMBINED_DIRECTORY']).resolve()
     # Define the directory that contains the raw data.
     dir_raw = Path(configuration_ini['GENERAL']['DATA_RAW_DIRECTORY']).resolve()
+    print(dir_combined)
+    exit()
     # Ensure the specified directories are valid.
     is_dir(directory=dir_combined, exit_on_error=True)
     is_dir(directory=dir_raw, exit_on_error=True)
