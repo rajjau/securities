@@ -9,6 +9,7 @@ from pathlib import Path
 ######################
 from modules.add_features import main as add_features
 from modules.border import main as border
+from modules.convert_to_list import main as convert_to_list
 from modules.is_file import main as is_file
 from modules.messages import msg_warn
 
@@ -41,10 +42,6 @@ def args():
     args = parser.parse_args()
     # Return the filename and symbols.
     return args.filename.absolute(), args.directory_output.absolute()
-
-def convert_to_list(string, delimiter):
-    """Split a string representation of a list into an actual list based on the provided $delimiter."""
-    return [item.strip() for item in string.split(delimiter)]
 
 ############
 ### MAIN ###
