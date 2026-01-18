@@ -179,7 +179,7 @@ def saved_model_filename(name, symbols, random_state):
     # Prepare the learner name for the filename.
     name = name.replace(' ', '_')
     # Build the filename using symbols (if provided) or 'all'.
-    filename = f"{name}_{'_'.join(symbols) if symbols else 'all'}_{timestamp}_seed{random_state}.joblib"
+    filename = f"{name}_{symbols}_{timestamp}_seed{random_state}.joblib"
     # Use `pathlib` to return the absolute path.
     return Path(filename).absolute()
 
