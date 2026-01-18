@@ -103,16 +103,14 @@ class FeatureEngineering:
         # Retrieve today's opening prices as a numpy array.
         curr_open = self.data['o'].values
         # Compute the percentage difference between yesterday's close and today's open.
-        self.new_columns['overnight_gap'] = divide(
+        overnight_gap = divide(
             curr_open - p_close,
             p_close,
             out=ones_like(p_close) * 0,
             where=p_close!=0
         ).astype('float32')
         # Create a 1-day lag of the overnight gap to see how the stock gapped yesterday.
-        self.new_columns['lagged_overnight_gap_1'] = DataFrame(self.new_columns['overnight_gap']).groupby(self.data['T'])[0].shift(1).values.flatten()
-        # Generate a binary flag if the price gap is greater than 0.5%.
-        self.new_columns['is_significant_gap'] = (abs(self.new_columns['overnight_gap']) > 0.005).astype('int32')
+        self.new_columns['lagged_overnight_gap_1'] = DataFrame(overnight_gap).groupby(self.data['T'])[0].shift(1).values.flatten()
 
     def add_lagged_features(self):
         # Display informational message to stdout.
