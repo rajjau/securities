@@ -1,15 +1,18 @@
 #!/usr/bin/env python
 from configparser import ConfigParser, ExtendedInterpolation
+from joblib import dump
 from pathlib import Path
 
 ######################
 ### CUSTOM MODULES ###
 ######################
 from modules.convert_to_list import main as convert_to_list
+from modules.date_and_time import main as date_and_time
 from modules.feature_selection_wrapper import main as feature_selection_wrapper
 from modules.import_and_parse import main as import_and_parse
 from modules.is_file import main as is_file
 from modules.messages import msg_info
+from modules.save_to_filename import main as save_to_filename
 from modules.train_test_split import main as train_test_split
 
 ################
@@ -29,6 +32,8 @@ LEAKY_COLUMNS = ['c', 'h', 'l', 'v', 'n', 'vw']
 ############
 def main(filename):
     """Main function to perform machine learning on financial data."""
+    # Create a timestamp.
+    timestamp = date_and_time(n_days_ago = 0, include_time = True).replace(' ', '_').replace(':', '')
     #---------------------#
     #--- Configuration ---#
     #---------------------#
@@ -38,9 +43,15 @@ def main(filename):
     configuration_ini = ConfigParser(interpolation = ExtendedInterpolation())
     # Read the configuration INI file.
     configuration_ini.read(CONFIG_INI)
+    # Obtain the directory that will contain saved objects.
+    dir_data_saved = Path(configuration_ini.get('GENERAL', 'DATA_SAVED_DIRECTORY')).resolve()
+    # Obtain the option that determines whether the current run is for production.
+    is_production = configuration_ini.getboolean('GENERAL', 'IS_PRODUCTION')
     #------------#
     #--- Data ---#
     #------------#
+    # Extract the symbol(s) from the filename.
+    symbols = filename.stem
     # Define the label column(s) (y).
     columns_y = convert_to_list(string=configuration_ini['DATA']['COLUMNS_Y'], delimiter=',')
     # Import and preprocess data for ML.
@@ -60,7 +71,7 @@ def main(filename):
     #--- Train/Test Split ---#
     #------------------------#
     # Split the data into training and testing datasets.
-    X_train, X_test, y_train, y_test, columns_x = train_test_split(
+    X_train, X_test, y_train, y_test, columns_x, scaler = train_test_split(
         data=data,
         columns_x=columns_x,
         columns_y=columns_y,
@@ -86,5 +97,36 @@ def main(filename):
         random_seeds=random_seeds,
         configuration_ini=configuration_ini
     )
+    #------------#
+    #--- Save ---#
+    #------------#
+    # Check if the current run is a production run.
+    if is_production is True:
+        # If so, then define the output file for the fitted scaler.
+        filename_saved_fittedscaler = save_to_filename(
+            dir_data_saved=dir_data_saved,
+            name='FittedScaler',
+            symbols=symbols,
+            extension='joblib',
+            random_state=False,
+            timestamp=timestamp
+        )
+        # Define the output file for the selected features.
+        filename_saved_selectedfeatures = save_to_filename(
+            dir_data_saved=dir_data_saved,
+            name='SelectedFeatures',
+            symbols=symbols,
+            extension='joblib',
+            random_state=False,
+            timestamp=timestamp
+        )
+        # Save the fitted scaler.
+        dump(scaler, filename_saved_fittedscaler)
+        # Display message to stdout.
+        msg_info(f"SAVED: Fitted scaler saved to: {filename_saved_fittedscaler}")
+        # Save the selected features.
+        dump(X_train.columns, filename_saved_selectedfeatures)
+        # Display message to stdout.
+        msg_info(f"SAVED: Selected features saved to: {filename_saved_selectedfeatures}")
     # Return the training and testing data.
     return X_train, X_test, y_train, y_test
