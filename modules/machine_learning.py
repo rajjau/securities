@@ -92,7 +92,8 @@ def hyperparameter_optimization(X_train, y_train, name, cross_validation_folds, 
                 y_train=y_train,
                 name=est_name,
                 cross_validation_folds=cross_validation_folds,
-                random_state=random_state
+                random_state=random_state,
+                scoring=scoring
             )
             best_base_models.append(optimized_base)
         # Update the parameter grid to include the optimized model objects.
