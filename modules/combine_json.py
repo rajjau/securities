@@ -7,7 +7,7 @@ from pathlib import Path
 ######################
 ### CUSTOM MODULES ###
 ######################
-from modules.listify import main as listify
+from modules.convert_to_list import main as convert_to_list
 from modules.messages import msg_info, msg_warn
 from modules.write_csv import main as write_csv
 
@@ -24,7 +24,7 @@ def args():
     # Parse the arguments.
     args = parser.parse_args()
     # Convert the $filenames into a list from a string, and additionally, define the absolute path for every filename.
-    filenames = [Path(entry).absolute() for entry in listify(args.filenames)]
+    filenames = [Path(entry).absolute() for entry in convert_to_list(string=args.filenames, delimiter=',')]
     # Return the arguments.
     return filenames, args.filename_output.absolute()
 
