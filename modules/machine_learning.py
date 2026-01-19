@@ -237,12 +237,12 @@ def main(X_train, y_train, X_test, y_test, name, symbols, random_state, configur
         timestamp=False
     )
     # Save the model if performance requirements are met.
-    save_model(
-        saved_model=saved_model,
-        model=model,
-        score=score,
-        save_threshold=configuration_ini.getfloat('ML', 'SAVE_THRESHOLD'),
-        is_production=configuration_ini.getboolean('GENERAL', 'IS_PRODUCTION')
-    )
+    # save_model(
+    #     saved_model=saved_model,
+    #     model=model,
+    #     score=score,
+    #     save_threshold=configuration_ini.getfloat('ML', 'SAVE_THRESHOLD'),
+    #     is_production=configuration_ini.getboolean('GENERAL', 'IS_PRODUCTION')
+    # )
     # Return the scores.
     return score, score_cv, score_cv_stddev, model_clone
