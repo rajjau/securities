@@ -11,6 +11,18 @@ from modules.messages import msg_info, msg_warn
 ################
 DECIMAL_PLACES = 1
 
+####################
+### COLUMN NAMES ###
+####################
+# Cross-validation.
+COL_CROSSVAL = 'CrossVal %'
+
+# Cross-alidation standard deviation.
+COL_CROSSVAL_STDDEV = 'CrossValStddev %'
+
+# Seed.
+COL_SEED = 'Seed'
+
 #################
 ### FUNCTIONS ###
 #################
@@ -18,10 +30,10 @@ def convert_to_dataframe(learner, random_seeds, total_score, total_cv_score, tot
     """Convert the lists of scores into a single Pandas DataFrame."""
     # Place the seeds, scores for the current $learner, cross-validation scores, and cross-validation standard deviations into a single DataFrame.
     df_scores = DataFrame({
-        'Seed': random_seeds,
+        COL_SEED: random_seeds,
         f"{learner} %": total_score,
-        'CrossVal %': total_cv_score,
-        'CrossValStddev %': total_cv_std
+        COL_CROSSVAL: total_cv_score,
+        COL_CROSSVAL_STDDEV: total_cv_std
     })
     # Define columns that will be turned into decimals.
     col_scores = df_scores.columns[1:]
@@ -73,3 +85,5 @@ def main(learner, total_score, total_cv_score, total_cv_std, random_seeds, save_
         df_scores.to_csv(filename_output, index=False, quoting=1)
     # Display the scores to stdout.
     print(df_scores.to_string(index = False))
+    # Return the DataFrame.
+    return df_scores
