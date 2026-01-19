@@ -101,7 +101,22 @@ def main(filename):
             total_score.append(score_seed)
             # Add the cross-validation score and standard deviation for the current $learner for the current $seed.
             total_cv_score.append(score_cv_seed)
-            total_cv_std.append(score_cv_stddev_seed)
+            total_cv_std.append(score_cv_stddev_seed)      
+        #-------------------#
+        #--- Seed Scores ---#
+        #-------------------#
+        # Define the output filename.
+        filename_output = Path(ROOT, f'RESULTS_{learner.replace(" ", "_")}.csv').absolute()
+        # Calculate and display the average scores for the current learner across all random seeds.
+        scores = calculate_results(
+            learner=learner,
+            total_score=total_score,
+            total_cv_score=total_cv_score,
+            total_cv_std=total_cv_std,
+            random_seeds=random_seeds,
+            save_results_to_file=configuration_ini.getboolean('GENERAL', 'SAVE_RESULTS_TO_FILE'),
+            filename_output=filename_output
+        )
         #----------------------------#
         #--- Consensus Prediction ---#
         #----------------------------#
@@ -113,23 +128,9 @@ def main(filename):
             name=learner,
             symbols=symbols,
             estimators=total_models,
+            scores=scores,
             configuration_ini=configuration_ini
-        )        
-        #-------------#
-        #--- Score ---#
-        #-------------#
-        # Define the output filename.
-        filename_output = Path(ROOT, f'RESULTS_{learner.replace(" ", "_")}.csv').absolute()
-        # Calculate and display the average scores for the current learner across all random seeds.
-        calculate_results(
-            learner=learner,
-            total_score=total_score,
-            total_cv_score=total_cv_score,
-            total_cv_std=total_cv_std,
-            random_seeds=random_seeds,
-            save_results_to_file=configuration_ini.getboolean('GENERAL', 'SAVE_RESULTS_TO_FILE'),
-            filename_output=filename_output
-        )
+        )  
 
 #############
 ### START ###
