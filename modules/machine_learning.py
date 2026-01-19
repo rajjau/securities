@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 from functools import partial
-from joblib import dump
 from json import loads
 from numpy import inf
 from pathlib import Path
 from pandas import concat
+from sklearn.base import clone
 from sklearn.metrics import make_scorer
 from sklearn.model_selection import cross_val_score, RandomizedSearchCV, TimeSeriesSplit
 from yaml import safe_load
@@ -13,7 +13,8 @@ from yaml import safe_load
 ### CUSTOM MODULES ###
 ######################
 from modules.dynamic_module_load import main as dynamic_module_load
-from modules.messages import msg_info,msg_warn
+from modules.messages import msg_info, msg_warn
+from modules.save_model import main as save_model
 from modules.save_to_filename import main as save_to_filename
 
 ################
@@ -172,16 +173,6 @@ def train_predict_rolling(model, X_train, y_train, X_test, y_test, retrain_step_
     # Return the $score.
     return score
 
-def save(saved_model, model, score, save_threshold, is_production):
-    # Check if saving is enabled and threshold is met.
-    if (save_threshold == -1) and (is_production is False): return None
-    # Check if the $score is Nonetype, meaning the model is being trained on the entire training set, OR if it's greater than or equal to the specified save threshold, OR if the current run is a production run.
-    if (score is None) or (score >= save_threshold) or (is_production is True):
-        # Save the model object.
-        dump(model, filename = saved_model)
-        # Message to stdout.
-        msg_info(f"SAVED: Trained model saved to: {saved_model}")
-
 ############
 ### MAIN ###
 ############
@@ -210,6 +201,8 @@ def main(X_train, y_train, X_test, y_test, name, symbols, random_state, configur
         model = learners[name]
     # Apply universal settings like the random seed.
     model = set_universal_params(model=model, random_state=random_state)
+    # Create a clone of the unfitted model.
+    model_clone = clone(model)
     # Set the cross-validation and cross-validation standard deviation (stddev) as Nonetype.
     score_cv, score_cv_stddev = (None, None)
     # Check if the option to perform cross-validation was enabled.
@@ -244,6 +237,12 @@ def main(X_train, y_train, X_test, y_test, name, symbols, random_state, configur
         timestamp=False
     )
     # Save the model if performance requirements are met.
-    save(saved_model=saved_model, model=model, score=score, save_threshold=configuration_ini.getfloat('ML', 'SAVE_THRESHOLD'), is_production=configuration_ini.getboolean('GENERAL', 'IS_PRODUCTION'))
+    save_model(
+        saved_model=saved_model,
+        model=model,
+        score=score,
+        save_threshold=configuration_ini.getfloat('ML', 'SAVE_THRESHOLD'),
+        is_production=configuration_ini.getboolean('GENERAL', 'IS_PRODUCTION')
+    )
     # Return the scores.
-    return score, score_cv, score_cv_stddev
+    return score, score_cv, score_cv_stddev, model_clone

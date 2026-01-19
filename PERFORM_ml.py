@@ -11,6 +11,7 @@ from modules.calculate_results import main as calculate_results
 from modules.convert_to_list import main as convert_to_list
 from modules.is_file import main as is_file
 from modules.machine_learning import main as machine_learning
+from modules.machine_learning_voting import main as machine_learning_voting
 from modules.messages import msg_info
 from modules.preprocessing import main as preprocessing
 
@@ -73,7 +74,8 @@ def main(filename):
     for learner in use_learners:
         # Create a border to denote a process.
         border(f"MACHINE LEARNING: {learner}", border_char='*')
-        # Initialize accumulators to zero at the start of each learner's seed loop
+        # Initialize accumulators to zero at the start of each learner's seed loop.
+        total_models = []
         total_score = []
         total_cv_score = []
         total_cv_std = []
@@ -82,7 +84,7 @@ def main(filename):
             # Message to stdout.
             msg_info(f"Seed {seed}")
             # Perform machine learning.
-            score_seed, score_cv_seed, score_cv_stddev_seed = machine_learning(
+            score_seed, score_cv_seed, score_cv_stddev_seed, model_seed = machine_learning(
                 X_train=X_train,
                 y_train=y_train,
                 X_test=X_test,
@@ -93,11 +95,26 @@ def main(filename):
                 configuration_ini=configuration_ini,
                 learners_yaml=LEARNERS_YAML
             )
+            # Add the unfitted model for the current $seed to the total list.
+            total_models.append((f"{learner}_{seed}", model_seed))
             # Add the score for the current $learner for the current $seed.
             total_score.append(score_seed)
             # Add the cross-validation score and standard deviation for the current $learner for the current $seed.
             total_cv_score.append(score_cv_seed)
             total_cv_std.append(score_cv_stddev_seed)
+        #----------------------------#
+        #--- Consensus Prediction ---#
+        #----------------------------#
+        machine_learning_voting(
+            X_train=X_train,
+            y_train=y_train,
+            X_test=X_test,
+            y_test=y_test,
+            name=learner,
+            symbols=symbols,
+            estimators=total_models,
+            configuration_ini=configuration_ini
+        )        
         #-------------#
         #--- Score ---#
         #-------------#
