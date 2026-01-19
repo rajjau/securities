@@ -50,7 +50,7 @@ def one_hot_encode_data(data, columns_x, columns_one_hot_encoding):
     # If $data is Nonetype then return Nonetype for both $data and $columns_x.
     if data is None: return None, None
     # Check if the global variable has been defined for a list of columns to perform one-hot encoding (OHE) to.
-    if columns_one_hot_encoding[0]:
+    if columns_one_hot_encoding:
         # Iterate through each column name in the list.
         for name in columns_one_hot_encoding:
             # Message to stdout.
