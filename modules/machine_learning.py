@@ -227,16 +227,16 @@ def main(X_train, y_train, X_test, y_test, name, symbols, random_state, configur
         model.fit(X_train, y_train)
         # Set the $score to Nonetype since there will be no prediction on the test set, as it doesn't exist.
         score = None
-    # Generate the filename for saving the model to an output file.
-    saved_model = save_to_filename(
-        dir_data_saved=Path(configuration_ini.get('GENERAL', 'DATA_SAVED_DIRECTORY')).resolve(),
-        name=f"Model_{name}",
-        symbols=symbols,
-        extension='joblib',
-        random_state=random_state,
-        timestamp=False
-    )
-    # Save the model if performance requirements are met.
+    # # Generate the filename for saving the model to an output file.
+    # saved_model = save_to_filename(
+    #     dir_data_saved=Path(configuration_ini.get('GENERAL', 'DATA_SAVED_DIRECTORY')).resolve(),
+    #     name=f"Model_{name}",
+    #     symbols=symbols,
+    #     extension='joblib',
+    #     random_state=random_state,
+    #     timestamp=False
+    # )
+    # # Save the model if performance requirements are met.
     # save_model(
     #     saved_model=saved_model,
     #     model=model,
