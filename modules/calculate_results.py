@@ -1,7 +1,8 @@
 #!/usr/bin/env python
+from numpy import array
 from pandas import concat, DataFrame
 
-#####################
+######################
 ### CUSTOM MODULES ###
 ######################
 from modules.messages import msg_info, msg_warn
@@ -28,12 +29,14 @@ COL_SEED = 'Seed'
 #################
 def convert_to_dataframe(learner, random_seeds, total_score, total_cv_score, total_cv_std):
     """Convert the lists of scores into a single Pandas DataFrame."""
-    # Place the seeds, scores for the current $learner, cross-validation scores, and cross-validation standard deviations into a single DataFrame.
+    # Define the column name that will contain the model performance.
+    col_perf = f"{learner} %"
+    # Place the seeds, scores for the current $learner, cross-validation scores, and cross-validation standard deviations into a single DataFrame. NumPy `array` is used to set the dtype to save memory. i4 = int32 and f4 = float32. 
     df_scores = DataFrame({
-        COL_SEED: random_seeds,
-        f"{learner} %": total_score,
-        COL_CROSSVAL: total_cv_score,
-        COL_CROSSVAL_STDDEV: total_cv_std
+        COL_SEED: array(random_seeds, dtype = 'i4'),
+        col_perf: array(total_score, dtype = 'f4'),
+        COL_CROSSVAL: array(total_cv_score, dtype = 'f4'),
+        COL_CROSSVAL_STDDEV: array(total_cv_std, dtype = 'f4'),
     })
     # Define columns that will be turned into decimals.
     col_scores = df_scores.columns[1:]
@@ -49,7 +52,7 @@ def convert_to_dataframe(learner, random_seeds, total_score, total_cv_score, tot
 def calculate_average_scores(df_scores, col_scores):
     """Calculate and display the average score for the current learner across all random seeds. Includes the cross-validation score if applicable."""
     # Calculate the average for all of the columns containing scores.
-    df_averages = df_scores[col_scores].mean(numeric_only = True).round(decimals = DECIMAL_PLACES)
+    df_averages = df_scores[col_scores].mean(numeric_only = True).round(decimals = DECIMAL_PLACES).astype('float32')
     # Convert the Series above to a single-row DataFrame.
     df_averages = df_averages.to_frame().T
     # Add the 'AVERAGE' label to the first ('Seed') column.
