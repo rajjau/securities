@@ -7,10 +7,11 @@ from functools import partial
 ######################
 ### CUSTOM MODULES ###
 ######################
+from modules.border import main as border
 from modules.calculate_results import COL_CROSSVAL, COL_CROSSVAL_STDDEV, COL_SEED, DECIMAL_PLACES
 from modules.dynamic_module_load import main as dynamic_module_load
 from modules.machine_learning import train_predict_rolling
-from modules.messages import msg_info
+from modules.messages import msg_info, msg_error
 from modules.save_model import main as save_model
 from modules.save_to_filename import main as save_to_filename
 
@@ -69,19 +70,27 @@ def create_scoring_metric(configuration_ini):
 ############
 ### MAIN ###
 ############
-def main(X_train, y_train, X_test, y_test, name, symbols, estimators, scores, configuration_ini):
+def main(X_train, y_train, X_test, y_test, name, symbols, pipelines, scores, configuration_ini):
+    # Create a border to denote a process.
+    border(message='VOTING CLASSIFIER', border_char='-')
     #--------------#
     #--- Filter ---#
     #--------------#
     # Apply a series of filters to identify the index of seeds of models that should be kept.
     idx = filters(name=name, scores=scores, configuration_ini=configuration_ini)
-    # Filter the list of estimators (tuples of name and Pipeline) using the identified indices.
-    estimators = [estimators[i] for i in idx]
+    # Filter the list of pipelines (tuples of name and Pipeline) using the identified indices.
+    pipelines = [pipelines[i] for i in idx]
+    # Check if any pipelines are left after filtering.
+    if not pipelines:
+        # If not, then display an error message to stdout.
+        msg_error('No models available after filtering. Voting Classifier will not be created.')
+        # Return Nonetype since there's nothing left to do.
+        return None
     #-------------#
     #--- Model ---#
     #-------------#
     # Define the Voting model. Since each estimator is a Pipeline, normalization and feature selection are handled per-seed.
-    model = VotingClassifier(estimators = estimators, voting = 'soft')
+    model = VotingClassifier(estimators = pipelines, voting = 'soft')
     #----------------#
     #--- Training ---#
     #----------------#
