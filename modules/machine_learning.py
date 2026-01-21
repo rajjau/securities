@@ -190,15 +190,15 @@ def main(X_train, y_train, X_test, y_test, name, symbols, random_state, configur
     # Define the feature selection step.
     feature_selection = FeatureSelection(configuration_ini=configuration_ini, random_state=random_state)
     # Instantiate the pipeline.
-    model = Pipeline(steps=[
+    pipeline = Pipeline(steps=[
         ('normalization', scaler),
         ('feature_selection', feature_selection),
         ('model', learners[name])
     ])
     # Ensure the pipeline outputs pandas DataFrames.
-    model.set_output(transform='pandas')
+    pipeline.set_output(transform='pandas')
     # Apply universal settings like the random seed to the pipeline.
-    model = set_universal_params(pipeline=model, random_state=random_state)
+    pipeline = set_universal_params(pipeline=pipeline, random_state=random_state)
     # Dynamically load the scoring metric.
     scoring_metric = dynamic_module_load(module_str=configuration_ini.get('ML', 'SCORING_METRIC'))
     # Load extra parameters defined in the configuration.ini.
@@ -206,24 +206,24 @@ def main(X_train, y_train, X_test, y_test, name, symbols, random_state, configur
     # Execute hyperparameter optimization (HPO) only on the training set to prevent leakage from the test set.
     if configuration_ini.getboolean('GENERAL', 'PERFORM_HYPERPARAMETER_OPTIMIZATION') is True:
         # Perform hyperparameter optimization.
-        model = hyperparameter_optimization(
+        pipeline = hyperparameter_optimization(
             X_train=X_train,
             y_train=y_train,
-            pipeline=model,
+            pipeline=pipeline,
             name=name,
             cross_validation_folds=configuration_ini.getint('ML', 'CROSS_VALIDATION_FOLDS'),
             random_state=random_state,
             scoring=make_scorer(score_func = scoring_metric, **scoring_metric_params)
         )
     # Create a clone of the unfitted pipeline.
-    model_clone = clone(model)
+    pipeline_clone = clone(pipeline)
     # Set the cross-validation and cross-validation standard deviation (stddev) as Nonetype.
     score_cv, score_cv_stddev = (None, None)
     # Check if the option to perform cross-validation was enabled.
     if configuration_ini.getboolean('GENERAL', 'PERFORM_CROSS_VALIDATION') is True:
         # Perform cross-validation and return its score and stddev.
         score_cv, score_cv_stddev = cross_validation(
-            model=model,
+            model=pipeline,
             X=X_train,
             y=y_train,
             cross_validation_folds=cross_validation_folds,
@@ -233,7 +233,7 @@ def main(X_train, y_train, X_test, y_test, name, symbols, random_state, configur
     if (X_test is not None) and (y_test is not None):
         # If so, then perform walk-forward rolling retraining.
         score = train_predict_rolling(
-            model=model,
+            model=pipeline,
             X_train=X_train,
             y_train=y_train,
             X_test=X_test,
@@ -244,8 +244,8 @@ def main(X_train, y_train, X_test, y_test, name, symbols, random_state, configur
         )
     else:
         # Otherwise, fit the pipeline on the full training set for production use.
-        model.fit(X_train, y_train)
+        pipeline.fit(X_train, y_train)
         # Set the $score to Nonetype since there will be no prediction on the test set, as it doesn't exist.
         score = None
     # Return the scores and the pipeline clone.
-    return score, score_cv, score_cv_stddev, model_clone
+    return score, score_cv, score_cv_stddev, pipeline_clone
