@@ -38,7 +38,7 @@ def args():
     parser.add_argument('filename', type=Path, help='Path to the CSV file containing all data for training and testing.')
     # Parse the arguments.
     args = parser.parse_args()
-    # Return the filename and symbols.
+    # Return the filename and tickers.
     return args.filename.absolute()
 
 ############
@@ -63,8 +63,8 @@ def main(filename):
     X_train, X_test, y_train, y_test = preprocessing(filename=filename)
     # Define the random seed(s).
     random_seeds = [int(item) for item in convert_to_list(string=configuration_ini['GENERAL']['RANDOM_SEED'], delimiter=',')]
-    # Extract the symbol(s) from the input filename.
-    symbols = filename.stem
+    # Extract the ticker(s) from the input filename.
+    tickers = filename.stem
     #------------------------#
     #--- Machine Learning ---#
     #------------------------#
@@ -90,7 +90,7 @@ def main(filename):
                 X_test=X_test,
                 y_test=y_test,
                 name=learner,
-                symbols=symbols,
+                tickers=tickers,
                 random_state=seed,
                 configuration_ini=configuration_ini,
                 learners_yaml=LEARNERS_YAML
@@ -126,7 +126,7 @@ def main(filename):
             X_test=X_test,
             y_test=y_test,
             name=learner,
-            symbols=symbols,
+            tickers=tickers,
             pipelines=total_pipelines,
             scores=scores,
             configuration_ini=configuration_ini
