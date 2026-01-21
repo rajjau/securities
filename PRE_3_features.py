@@ -37,10 +37,10 @@ def args():
     parser = ArgumentParser(description='Add features to financial data.')
     # Add arguments.
     parser.add_argument('filename', type=Path, help='CSV containing the combined stock data to add features to.')
-    parser.add_argument('directory_output', type=Path, help='Directory that will contain the Parquet output files for every symbol defined in the configuration INI.')
+    parser.add_argument('directory_output', type=Path, help='Directory that will contain the Parquet output files for every ticker defined in the configuration INI.')
     # Parse the arguments.
     args = parser.parse_args()
-    # Return the filename and symbols.
+    # Return the filename and tickers.
     return args.filename.absolute(), args.directory_output.absolute()
 
 ############
@@ -63,46 +63,44 @@ def main(filename, directory_output):
     #------------#
     #--- Data ---#
     #------------#
-    # Define the symbols to process.
-    symbols = convert_to_list(string=configuration_ini['DATA']['SYMBOLS'], delimiter=',')
-    # Iterate through each symbol.
-    for symbol in symbols:
+    # Define the tickers to process.
+    tickers = convert_to_list(string=configuration_ini['DATA']['TICKERS'], delimiter=',')
+    # Iterate through each ticker.
+    for ticker in tickers:
         # Message to stdout.
-        border(symbol, border_char = '-')
-        # Define the output filename for the current symbol.
-        filename_output = Path(directory_output, f"{symbol}.parquet")
-        # If the output file already exists, skip processing for this symbol.
+        border(ticker, border_char = '-')
+        # Define the output filename for the current ticker.
+        filename_output = Path(directory_output, f"{ticker}.parquet")
+        # If the output file already exists, skip processing for this ticker.
         if filename_output.is_file():
             # Message to stdout.
             msg_warn(f"SKIP: Output file already exists: {filename_output}")
-            # Continue to the next symbol.
+            # Continue to the next ticker.
             continue
-        # Define a list to hold all data for the current symbol.
-        data_symbol = []
+        # Define a list to hold all data for the current ticker.
+        data_ticker = []
         # Read the entire dataset in chunks to manage memory usage.
         chunks = read_csv(filepath_or_buffer = filename, chunksize = CHUNKSIZE)
         # Iterate through each chunk.
         for chunk in chunks:
-            # Filter the chunk for the current symbol.
-            matches = chunk.loc[chunk['T'] == symbol, :]
+            # Filter the chunk for the current ticker.
+            matches = chunk.loc[chunk['T'] == ticker, :]
             # If matches were found, append them to the list.
-            if not matches.empty: data_symbol.append(matches)
-        # Concatenate all chunks for the current symbol into a single DataFrame.
-        data_symbol = concat(data_symbol, axis = 0).reset_index(drop = True)
+            if not matches.empty: data_ticker.append(matches)
+        # Concatenate all chunks for the current ticker into a single DataFrame.
+        data_ticker = concat(data_ticker, axis = 0).reset_index(drop = True)
         # Remove all duplicate rows.
-        data_symbol = data_symbol.drop_duplicates(keep = 'first')
+        data_ticker = data_ticker.drop_duplicates(keep = 'first')
         # Remove all rows that contain any NaNs.
-        data_symbol = data_symbol.dropna(axis = 0)
-        # Sort the DataFrame by the symbol name and timestamp. This groups stocks and ensures the data for a given stock is in order from earliest to most recent.
-        data_symbol = data_symbol.sort_values(by = SORT_BY_COLUMNS)
+        data_ticker = data_ticker.dropna(axis = 0)
+        # Sort the DataFrame by the ticker name and timestamp. This groups stocks and ensures the data for a given stock is in order from earliest to most recent.
+        data_ticker = data_ticker.sort_values(by = SORT_BY_COLUMNS)
         # Add various extra features to the $data.
-        data_symbol = add_features(data_symbol)
-        # Again, remove all rows that contain any NaNs after adding features.
-        data_symbol = data_symbol.dropna(axis = 0)
+        data_ticker = add_features(data_ticker)
         # Ensure the data is still sorted correctly after dropping rows.
-        data_symbol = data_symbol.sort_values(by = SORT_BY_COLUMNS).reset_index(drop = True)
+        data_ticker = data_ticker.sort_values(by = SORT_BY_COLUMNS).reset_index(drop = True)
         # Save the $data with new features to the output file.
-        data_symbol.to_parquet(path = filename_output, index = False)
+        data_ticker.to_parquet(path = filename_output, index = False)
 
 #############
 ### START ###
