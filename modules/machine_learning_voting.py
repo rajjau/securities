@@ -51,8 +51,8 @@ def filters(name, scores, configuration_ini):
     else:
         # Otherwise, set the number of top models. `min` is used to ensure the top N models isn't greater than the total number of models left.
         n_models = min(total_models, int(n_models))
-    # Define model indexes to keep.
-    idx = scores[COL_SEED].index[:n_models]
+    # Define model indexes to keep based on the filtered results.
+    idx = scores.index[:n_models]
     # Return the indexes.
     return idx
 
@@ -75,19 +75,21 @@ def main(X_train, y_train, X_test, y_test, name, symbols, estimators, scores, co
     #--------------#
     # Apply a series of filters to identify the index of seeds of models that should be kept.
     idx = filters(name=name, scores=scores, configuration_ini=configuration_ini)
-    # Apply the indexes to the list of estimators.
+    # Filter the list of estimators (tuples of name and Pipeline) using the identified indices.
     estimators = [estimators[i] for i in idx]
     #-------------#
     #--- Model ---#
     #-------------#
-    # Define the Voting model using unfitted models from every seed.
+    # Define the Voting model. Since each estimator is a Pipeline, normalization and feature selection are handled per-seed.
     model = VotingClassifier(estimators = estimators, voting = 'soft')
     #----------------#
     #--- Training ---#
     #----------------#
-    # Check if the test set has been defined.
+    # Initialize score to None in case the test set is empty.
+    score = None
+    # Check if the test set has been defined to perform rolling validation.
     if (X_test is not None) and (y_test is not None):
-        # If so, then perform walk-forward rolling retraining.
+        # Execute walk-forward rolling retraining using the ensemble of pipelines.
         score = train_predict_rolling(
             model=model,
             X_train=X_train,
@@ -98,21 +100,24 @@ def main(X_train, y_train, X_test, y_test, name, symbols, estimators, scores, co
             sliding_window_size=configuration_ini.getint('ML', 'SLIDING_WINDOW_SIZE'),
             scoring_metric=create_scoring_metric(configuration_ini=configuration_ini)
         )
-        # Message to stdout.
+        # Message the voting consensus score to stdout.
         msg_info(f"VOTING CONSENSUS SCORE: {round(score * 100, DECIMAL_PLACES)}")
+    else:
+        # If no test set, fit the ensemble on the full training data for immediate production deployment.
+        model.fit(X_train, y_train)
     #------------#
     #--- Save ---#
     #------------#
     # Generate the filename for saving the model to an output file.
     saved_model = save_to_filename(
         dir_data_saved=Path(configuration_ini.get('GENERAL', 'DATA_SAVED_DIRECTORY')).resolve(),
-        name=f"Consenus_Model_{name}",
+        name=f"Consensus_Model_{name}",
         symbols=symbols,
         extension='joblib',
         random_state=False,
         timestamp=False
     )
-    # Save the model if performance requirements are met.
+    # Save the ensemble model (including all internal pipelines) if performance requirements are met.
     save_model(
         saved_model=saved_model,
         model=model,
