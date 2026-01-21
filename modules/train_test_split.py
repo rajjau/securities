@@ -101,6 +101,7 @@ def main(data, columns_x, columns_y, columns_one_hot_encoding, holdout_days, nor
     columns_x_ohe = [entry for entry in X_train.columns if X_train[entry].dtype.kind in 'if']
     # Filter the DataFrames to only include the verified numeric columns.
     X_train = X_train[columns_x_ohe]
+    # If the testing set exists, then apply one-hot-encoding as well.
     if X_test is not None: X_test = X_test[columns_x_ohe]
     # Check if the $normalize_X toggle is set to True.
     if normalize_X is True:
@@ -110,5 +111,8 @@ def main(data, columns_x, columns_y, columns_one_hot_encoding, holdout_days, nor
         X_train, scaler = apply_normalize(X=X_train, columns_x=columns_x_ohe, normalize_method=normalize_method, scaler=None)
         # Use the fitted scaler from the training set to normalize the testing features.
         X_test, _ = apply_normalize(X=X_test, columns_x=columns_x_ohe, normalize_method=normalize_method, scaler=scaler)
+    else:
+        # Otehrtwise, set $scaler to None.
+        scaler = None
     # Return the training and testing features, labels, and the updated $columns_x_ohe list.
     return X_train, X_test, y_train, y_test, columns_x_ohe, scaler
