@@ -7,15 +7,15 @@ from pandas import concat
 from sklearn.base import clone
 from sklearn.metrics import make_scorer
 from sklearn.model_selection import cross_val_score, RandomizedSearchCV, TimeSeriesSplit
+from sklearn.pipeline import Pipeline
 from yaml import safe_load
 
 ######################
 ### CUSTOM MODULES ###
 ######################
 from modules.dynamic_module_load import main as dynamic_module_load
+from modules.feature_selection_wrapper import FeatureSelection
 from modules.messages import msg_info, msg_warn
-from modules.save_model import main as save_model
-from modules.save_to_filename import main as save_to_filename
 
 ################
 ### WARNINGS ###
@@ -54,22 +54,28 @@ def load_learners(learners_yaml):
         if name == 'Logistic Regression' and 'C' in optimization_params:
             # Convert the '.inf' string from YAML into a float infinity value.
             optimization_params['C'] = [inf if x == '.inf' else x for x in optimization_params['C']]
-        # Store the search grid in the global $learners_hyperparameters dictionary.
-        learners_hyperparameters[name] = optimization_params
+        # Store the search grid in the global $learners_hyperparameters dictionary with the pipeline prefix.
+        learners_hyperparameters[name] = {f'model__{k}': v for k, v in optimization_params.items()}
 
 #################
 ### FUNCTIONS ###
 #################
-def set_universal_params(model, random_state):
+def set_universal_params(pipeline, random_state):
+    # Create a dictionary to hold parameters to update.
+    params = {}
+    # Check if the feature selection step exists in the pipeline to set its seed.
+    if 'feature_selection' in pipeline.named_steps: params['feature_selection__random_state'] = random_state
+    # Check if the model step exists to set its seed.
     try:
-        # Use the current seed (if applicable).
-        model.set_params(random_state = random_state)
-    except ValueError:
+        pipeline.named_steps['model'].set_params(random_state = random_state)
+    except (ValueError, AttributeError):
         pass
-    # Return the $model.
-    return model
+    # Apply the parameters to the pipeline.
+    pipeline.set_params(**params)
+    # Return the $pipeline.
+    return pipeline
 
-def hyperparameter_optimization(X_train, y_train, name, cross_validation_folds, random_state, scoring):
+def hyperparameter_optimization(X_train, y_train, pipeline, name, cross_validation_folds, random_state, scoring):
     try:
         # Obtain the parameters from the dictionary defined above.
         params = learners_hyperparameters[name].copy()
@@ -77,11 +83,11 @@ def hyperparameter_optimization(X_train, y_train, name, cross_validation_folds, 
         # If no hyperparameters were defined for $name, then raise an error.
         msg_warn(f"The following learner name has no entries within the hyperparameter dictionary: '{name}'")
         # Return the default learner instead.
-        return learners[name]
+        return pipeline
     # Check if the current model is Bagging to handle its sub-estimators.
     if name == 'Bagging':
-        # Retrieve the list of potential base estimators.
-        estimator_options = params.pop('estimator_options', [])
+        # Retrieve the list of potential base estimators using the pipeline prefix.
+        estimator_options = params.pop('model__estimator_options', [])
         # Define a list to store the optimized versions of these base estimators.
         best_base_models = []
         # Iterate through each estimator.
@@ -91,6 +97,7 @@ def hyperparameter_optimization(X_train, y_train, name, cross_validation_folds, 
             optimized_base = hyperparameter_optimization(
                 X_train=X_train,
                 y_train=y_train,
+                pipeline=pipeline,
                 name=est_name,
                 cross_validation_folds=cross_validation_folds,
                 random_state=random_state,
@@ -98,35 +105,32 @@ def hyperparameter_optimization(X_train, y_train, name, cross_validation_folds, 
             )
             best_base_models.append(optimized_base)
         # Update the parameter grid to include the optimized model objects.
-        params['estimator'] = best_base_models
+        params['model__estimator'] = best_base_models
     # Define a time series split object to prevent future data from leaking into the training folds during optimization.
     timeseries_k_fold = TimeSeriesSplit(n_splits = cross_validation_folds)
-    # Define the learner.
-    model = learners[name]
-    # Set universal parameters.
-    model = set_universal_params(model=model, random_state=random_state)
-    # Define the RandomizedSearchCV object using the TimeSeriesSplit object.
+    # Set universal parameters on the pipeline.
+    pipeline = set_universal_params(pipeline=pipeline, random_state=random_state)
+    # Define the RandomizedSearchCV object using the TimeSeriesSplit object and the full pipeline.
     search = RandomizedSearchCV(
         cv = timeseries_k_fold,
-        estimator = model,
+        estimator = pipeline,
         n_iter = 10,
         n_jobs = -1,
         param_distributions = params,
         random_state = random_state,
         scoring = scoring
     )
-    # Fit the model to the training data.
+    # Fit the pipeline to the training data.
     search.fit(X_train, y_train)
-    # Identify the model with the best performance.
-    best_model = search.best_estimator_
-    # Return the $best_model.
-    return best_model
+    # Identify the pipeline with the best performance.
+    best_pipeline = search.best_estimator_
+    # Return the $best_pipeline.
+    return best_pipeline
 
-def cross_validation(model, X, y, cross_validation_folds):
-    """Run cross-validation using chronological folds."""
-    # Execute cross-validation using TimeSeriesSplit to ensure no look-ahead bias during validation.
-    score_cv = cross_val_score(model, X, y, cv=TimeSeriesSplit(n_splits=cross_validation_folds), scoring='matthews_corrcoef')
-    # Return the cross-validation mean score and standard deviation.
+def cross_validation(model, X, y, cross_validation_folds, scoring):
+    # Pass the scoring object to maintain consistency with HPO.
+    score_cv = cross_val_score(model, X, y, cv=TimeSeriesSplit(n_splits=cross_validation_folds), scoring=scoring)
+    # Return the mean and standard deviation.
     return score_cv.mean(), score_cv.std()
 
 def train_predict_rolling(model, X_train, y_train, X_test, y_test, retrain_step_frequency, sliding_window_size, scoring_metric):
@@ -181,6 +185,20 @@ def main(X_train, y_train, X_test, y_test, name, symbols, random_state, configur
     cross_validation_folds = configuration_ini.getint('ML', 'CROSS_VALIDATION_FOLDS')
     # Load configuration to populate global dictionaries.
     load_learners(learners_yaml=learners_yaml)
+    # Dynamically load the normalization method.
+    scaler = dynamic_module_load(module_str=configuration_ini.get('NORMALIZATION', 'NORMALIZE_METHOD'))()
+    # Define the feature selection step.
+    feature_selection = FeatureSelection(configuration_ini=configuration_ini, random_state=random_state)
+    # Instantiate the pipeline.
+    model = Pipeline(steps=[
+        ('normalization', scaler),
+        ('feature_selection', feature_selection),
+        ('model', learners[name])
+    ])
+    # Ensure the pipeline outputs pandas DataFrames.
+    model.set_output(transform='pandas')
+    # Apply universal settings like the random seed to the pipeline.
+    model = set_universal_params(pipeline=model, random_state=random_state)
     # Dynamically load the scoring metric.
     scoring_metric = dynamic_module_load(module_str=configuration_ini.get('ML', 'SCORING_METRIC'))
     # Load extra parameters defined in the configuration.ini.
@@ -191,24 +209,26 @@ def main(X_train, y_train, X_test, y_test, name, symbols, random_state, configur
         model = hyperparameter_optimization(
             X_train=X_train,
             y_train=y_train,
+            pipeline=model,
             name=name,
             cross_validation_folds=configuration_ini.getint('ML', 'CROSS_VALIDATION_FOLDS'),
             random_state=random_state,
             scoring=make_scorer(score_func = scoring_metric, **scoring_metric_params)
         )
-    else:
-        # Retrieve the learner with default parameters.
-        model = learners[name]
-    # Apply universal settings like the random seed.
-    model = set_universal_params(model=model, random_state=random_state)
-    # Create a clone of the unfitted model.
+    # Create a clone of the unfitted pipeline.
     model_clone = clone(model)
     # Set the cross-validation and cross-validation standard deviation (stddev) as Nonetype.
     score_cv, score_cv_stddev = (None, None)
     # Check if the option to perform cross-validation was enabled.
     if configuration_ini.getboolean('GENERAL', 'PERFORM_CROSS_VALIDATION') is True:
         # Perform cross-validation and return its score and stddev.
-        score_cv, score_cv_stddev = cross_validation(model=model, X=X_train, y=y_train, cross_validation_folds=cross_validation_folds)
+        score_cv, score_cv_stddev = cross_validation(
+            model=model,
+            X=X_train,
+            y=y_train,
+            cross_validation_folds=cross_validation_folds,
+            scoring=make_scorer(score_func = scoring_metric, **scoring_metric_params)
+        )
     # Check if the test set has been defined.
     if (X_test is not None) and (y_test is not None):
         # If so, then perform walk-forward rolling retraining.
@@ -223,26 +243,9 @@ def main(X_train, y_train, X_test, y_test, name, symbols, random_state, configur
             scoring_metric=partial(scoring_metric, **scoring_metric_params)
         )
     else:
-        # Otherwise, fit the model on the full training set for production use.
+        # Otherwise, fit the pipeline on the full training set for production use.
         model.fit(X_train, y_train)
         # Set the $score to Nonetype since there will be no prediction on the test set, as it doesn't exist.
         score = None
-    # # Generate the filename for saving the model to an output file.
-    # saved_model = save_to_filename(
-    #     dir_data_saved=Path(configuration_ini.get('GENERAL', 'DATA_SAVED_DIRECTORY')).resolve(),
-    #     name=f"Model_{name}",
-    #     symbols=symbols,
-    #     extension='joblib',
-    #     random_state=random_state,
-    #     timestamp=False
-    # )
-    # # Save the model if performance requirements are met.
-    # save_model(
-    #     saved_model=saved_model,
-    #     model=model,
-    #     score=score,
-    #     save_threshold=configuration_ini.getfloat('ML', 'SAVE_THRESHOLD'),
-    #     is_production=configuration_ini.getboolean('GENERAL', 'IS_PRODUCTION')
-    # )
-    # Return the scores.
+    # Return the scores and the pipeline clone.
     return score, score_cv, score_cv_stddev, model_clone
