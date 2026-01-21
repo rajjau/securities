@@ -2,9 +2,9 @@
 from functools import partial
 from json import loads
 from numpy import inf
-from pathlib import Path
 from pandas import concat
 from sklearn.base import clone
+from sklearn.impute import SimpleImputer
 from sklearn.metrics import make_scorer
 from sklearn.model_selection import cross_val_score, RandomizedSearchCV, TimeSeriesSplit
 from sklearn.pipeline import Pipeline
@@ -60,11 +60,28 @@ def load_learners(learners_yaml):
 #################
 ### FUNCTIONS ###
 #################
+def build_pipeline(name, random_state, configuration_ini):
+    # Dynamically load the normalization method.
+    scaler = dynamic_module_load(module_str=configuration_ini.get('NORMALIZATION', 'NORMALIZE_METHOD'))()
+    # Define the feature selection step.
+    feature_selection = FeatureSelection(configuration_ini=configuration_ini, random_state=random_state)
+    # Instantiate the pipeline.
+    pipeline = Pipeline(steps=[
+        ('replace_missing_values', SimpleImputer(strategy = 'mean')),
+        ('normalization', scaler),
+        ('feature_selection', feature_selection),
+        ('model', learners[name])
+    ])
+    # Ensure the pipeline outputs DataFrame objects.
+    pipeline.set_output(transform = 'pandas')
+    # Apply universal settings like the random seed to the pipeline.
+    pipeline = set_universal_params(pipeline=pipeline, random_state=random_state)
+    # Return the $pipeline.
+    return pipeline
+
 def set_universal_params(pipeline, random_state):
     # Create a dictionary to hold parameters to update.
     params = {}
-    # Check if the feature selection step exists in the pipeline to set its seed.
-    if 'feature_selection' in pipeline.named_steps: params['feature_selection__random_state'] = random_state
     # Check if the model step exists to set its seed.
     try:
         pipeline.named_steps['model'].set_params(random_state = random_state)
@@ -91,14 +108,14 @@ def hyperparameter_optimization(X_train, y_train, pipeline, name, cross_validati
         # Define a list to store the optimized versions of these base estimators.
         best_base_models = []
         # Iterate through each estimator.
-        for est_name in estimator_options:
+        for estimator_name in estimator_options:
             # Recursively call this function to find the best hyperparameters for the base learner.
-            msg_info(f"Optimizing base estimator '{est_name}' for the Bagging ensemble...")
+            msg_info(f"Optimizing base estimator '{estimator_name}' for the Bagging ensemble...")
             optimized_base = hyperparameter_optimization(
                 X_train=X_train,
                 y_train=y_train,
                 pipeline=pipeline,
-                name=est_name,
+                name=estimator_name,
                 cross_validation_folds=cross_validation_folds,
                 random_state=random_state,
                 scoring=scoring
@@ -114,18 +131,18 @@ def hyperparameter_optimization(X_train, y_train, pipeline, name, cross_validati
     search = RandomizedSearchCV(
         cv = timeseries_k_fold,
         estimator = pipeline,
-        n_iter = 10,
+        n_iter = 50,
         n_jobs = -1,
         param_distributions = params,
         random_state = random_state,
         scoring = scoring
     )
-    # Fit the pipeline to the training data.
+    # Fit the model to the training data.
     search.fit(X_train, y_train)
-    # Identify the pipeline with the best performance.
-    best_pipeline = search.best_estimator_
-    # Return the $best_pipeline.
-    return best_pipeline
+    # Identify the model with the best performance.
+    best_estimator = search.best_estimator_
+    # Return the $best_estimator.
+    return best_estimator
 
 def cross_validation(model, X, y, cross_validation_folds, scoring):
     # Pass the scoring object to maintain consistency with HPO.
@@ -180,29 +197,28 @@ def train_predict_rolling(model, X_train, y_train, X_test, y_test, retrain_step_
 ############
 ### MAIN ###
 ############
-def main(X_train, y_train, X_test, y_test, name, symbols, random_state, configuration_ini, learners_yaml):
+def main(X_train, y_train, X_test, y_test, name, tickers, random_state, configuration_ini, learners_yaml):
     # Obtain number of cross-validation folds from configuration file.
     cross_validation_folds = configuration_ini.getint('ML', 'CROSS_VALIDATION_FOLDS')
+    #--------------#
+    #--- Models ---#
+    #--------------#
     # Load configuration to populate global dictionaries.
     load_learners(learners_yaml=learners_yaml)
-    # Dynamically load the normalization method.
-    scaler = dynamic_module_load(module_str=configuration_ini.get('NORMALIZATION', 'NORMALIZE_METHOD'))()
-    # Define the feature selection step.
-    feature_selection = FeatureSelection(configuration_ini=configuration_ini, random_state=random_state)
-    # Instantiate the pipeline.
-    pipeline = Pipeline(steps=[
-        ('normalization', scaler),
-        ('feature_selection', feature_selection),
-        ('model', learners[name])
-    ])
-    # Ensure the pipeline outputs pandas DataFrames.
-    pipeline.set_output(transform='pandas')
-    # Apply universal settings like the random seed to the pipeline.
-    pipeline = set_universal_params(pipeline=pipeline, random_state=random_state)
+    #---------------#
+    #--- Pipeline --#
+    #---------------#
+    pipeline = build_pipeline(name=name, random_state=random_state, configuration_ini=configuration_ini)
+    #----------------------#
+    #--- Scoring Metric ---#
+    #----------------------#
     # Dynamically load the scoring metric.
     scoring_metric = dynamic_module_load(module_str=configuration_ini.get('ML', 'SCORING_METRIC'))
     # Load extra parameters defined in the configuration.ini.
     scoring_metric_params = loads(configuration_ini.get('ML', 'SCORING_METRIC_PARAMETERS'))
+    #-----------------------------------#
+    #--- Hyperparameter Optimization ---#
+    #-----------------------------------#
     # Execute hyperparameter optimization (HPO) only on the training set to prevent leakage from the test set.
     if configuration_ini.getboolean('GENERAL', 'PERFORM_HYPERPARAMETER_OPTIMIZATION') is True:
         # Perform hyperparameter optimization.
@@ -217,6 +233,9 @@ def main(X_train, y_train, X_test, y_test, name, symbols, random_state, configur
         )
     # Create a clone of the unfitted pipeline.
     pipeline_clone = clone(pipeline)
+    #------------------------#
+    #--- Cross-Validation ---#
+    #------------------------#
     # Set the cross-validation and cross-validation standard deviation (stddev) as Nonetype.
     score_cv, score_cv_stddev = (None, None)
     # Check if the option to perform cross-validation was enabled.
@@ -229,6 +248,9 @@ def main(X_train, y_train, X_test, y_test, name, symbols, random_state, configur
             cross_validation_folds=cross_validation_folds,
             scoring=make_scorer(score_func = scoring_metric, **scoring_metric_params)
         )
+    #----------------#
+    #--- Training ---#
+    #----------------#
     # Check if the test set has been defined.
     if (X_test is not None) and (y_test is not None):
         # If so, then perform walk-forward rolling retraining.
