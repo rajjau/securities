@@ -70,7 +70,7 @@ def create_scoring_metric(configuration_ini):
 ############
 ### MAIN ###
 ############
-def main(X_train, y_train, X_test, y_test, name, symbols, pipelines, scores, configuration_ini):
+def main(X_train, y_train, X_test, y_test, name, tickers, pipelines, scores, configuration_ini):
     # Create a border to denote a process.
     border(message='VOTING CLASSIFIER', border_char='-')
     #--------------#
@@ -121,7 +121,7 @@ def main(X_train, y_train, X_test, y_test, name, symbols, pipelines, scores, con
     saved_model = save_to_filename(
         dir_data_saved=Path(configuration_ini.get('GENERAL', 'DATA_SAVED_DIRECTORY')).resolve(),
         name=f"Consensus_Model_{name}",
-        symbols=symbols,
+        tickers=tickers,
         extension='joblib',
         random_state=False,
         timestamp=False
