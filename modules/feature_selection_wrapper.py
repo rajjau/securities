@@ -10,7 +10,7 @@ from modules.feature_selection import main as feature_selection
 ### MAIN ###
 ############
 class FeatureSelection(BaseEstimator, TransformerMixin):
-    def __init__(self, configuration_ini, random_state):
+    def __init__(self, configuration_ini, random_state = None):
         # Make input variables class global variables.
         self.configuration_ini = configuration_ini
         self.random_state = random_state
