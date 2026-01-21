@@ -73,9 +73,9 @@ def main(filename):
     # Iterate through each random seed.
     for learner in use_learners:
         # Create a border to denote a process.
-        border(f"MACHINE LEARNING: {learner}", border_char='*')
+        border(f"MACHINE LEARNING: {learner}", border_char='><')
         # Initialize accumulators to zero at the start of each learner's seed loop.
-        total_models = []
+        total_pipelines = []
         total_score = []
         total_cv_score = []
         total_cv_std = []
@@ -84,7 +84,7 @@ def main(filename):
             # Message to stdout.
             msg_info(f"Seed {seed}")
             # Perform machine learning.
-            score_seed, score_cv_seed, score_cv_stddev_seed, model_seed = machine_learning(
+            score_seed, score_cv_seed, score_cv_stddev_seed, pipeline_seed = machine_learning(
                 X_train=X_train,
                 y_train=y_train,
                 X_test=X_test,
@@ -95,8 +95,8 @@ def main(filename):
                 configuration_ini=configuration_ini,
                 learners_yaml=LEARNERS_YAML
             )
-            # Add the unfitted model for the current $seed to the total list.
-            total_models.append((f"{learner}_{seed}", model_seed))
+            # Add the unfitted pipeline for the current $seed to the total list.
+            total_pipelines.append((f"{learner}_{seed}", pipeline_seed))
             # Add the score for the current $learner for the current $seed.
             total_score.append(score_seed)
             # Add the cross-validation score and standard deviation for the current $learner for the current $seed.
@@ -127,7 +127,7 @@ def main(filename):
             y_test=y_test,
             name=learner,
             symbols=symbols,
-            estimators=total_models,
+            pipelines=total_pipelines,
             scores=scores,
             configuration_ini=configuration_ini
         )  
