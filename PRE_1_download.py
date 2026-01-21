@@ -100,7 +100,7 @@ def main(dir_data, dates):
     if dir_data: create_directory(dir_data, fail_if_exists = False)
     # Parse the specified $dates and convert into datetime objects. If both a starting and ending date was specified by user, then exapnd the $dates tuple to include all intermediate dates, excluding weekends.
     dates = date(dates)()
-    # Download the data for the specified stock $symbols from Polygon.io in JSON format. Returns a list of all newly downloaded data JSON files.
+    # Download the data for the specified stock $tickers from Polygon.io in JSON format. Returns a list of all newly downloaded data JSON files.
     filenames_output = polygon_io(dir_data = dir_data, dates = dates)
     # Return the list of JSON data files.
     return(filenames_output)
