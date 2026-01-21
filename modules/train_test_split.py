@@ -1,22 +1,13 @@
 #!/usr/bin/env python
 from numpy import unique
 from pandas import DataFrame
-from sklearn.preprocessing import RobustScaler, StandardScaler, MinMaxScaler
 
 ######################
 ### CUSTOM MODULES ###
 ######################
+from modules.dynamic_module_load import main as dynamic_module_load
 from modules.messages import msg_info
 from modules.one_hot_encoding import main as one_hot_encoding
-
-#############################
-### NORMALIZATION METHODS ###
-#############################
-NORMALIZE_METHODS = {
-    'MinMaxScaler': MinMaxScaler,
-    'RobustScaler': RobustScaler,
-    'StandardScaler': StandardScaler
-}
 
 #################
 ### FUNCTIONS ###
@@ -68,7 +59,7 @@ def apply_normalize(X, columns_x, normalize_method, scaler = None):
     # Check if the $scaler has not been fitted already.
     if not scaler:
         # Initialize the scaler.
-        scaler = NORMALIZE_METHODS[normalize_method]()
+        scaler = dynamic_module_load(module_str=normalize_method)()
         # Fit the scaler to $X.
         scaler = scaler.fit(X)
     # Transform $X using the fitted scaler.
