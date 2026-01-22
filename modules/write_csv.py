@@ -17,4 +17,4 @@ def main(data, filename):
         # Set the mode to write.
         mode = 'w'
     # Save the combined $data to the output file.
-    data.to_csv(filename, header = header, index = False, mode = mode, quoting = 1)
+    data.to_csv(filename, header = header, index = False, mode = mode)
