@@ -26,7 +26,7 @@ CONFIG_INI = Path(ROOT, 'configuration.ini')
 CHUNKSIZE = 5000
 
 # Columns to sort the DataFrame by.
-SORT_BY_COLUMNS = ['T', 't']
+SORT_BY_COLUMNS = ['t']
 
 #################
 ### FUNCTIONS ###
@@ -92,9 +92,7 @@ def main(filename, directory_output):
         # Remove all duplicate rows.
         data_ticker = data_ticker.drop_duplicates(keep = 'first')
         # Remove all rows that contain any NaNs.
-        data_ticker = data_ticker.dropna(axis = 0)
-        # Sort the DataFrame by the ticker name and timestamp. This groups stocks and ensures the data for a given stock is in order from earliest to most recent.
-        data_ticker = data_ticker.sort_values(by = SORT_BY_COLUMNS)
+        data_ticker = data_ticker.dropna(axis = 0).reset_index(drop = True)
         # Add various extra features to the $data.
         data_ticker = add_features(data_ticker)
         # Ensure the data is still sorted correctly after dropping rows.
