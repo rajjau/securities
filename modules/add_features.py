@@ -81,15 +81,21 @@ class FeatureEngineering:
         
     def add_overnight_features(self):
         # Display informational message to stdout.
-        msg_info('Features: Overnight gap.')
+        msg_info('Features: Overnight.')
         # Retrieve yesterday's closing prices as a numpy array.
         p_close = self.prev_close.values
         # Retrieve today's opening prices as a numpy array.
         today_open = self.data['o'].values
         # Overnight Gap = (today's open - yesterday's close) / yesterday's close. This provides the percentage change.
-        overnight_gap = divide((today_open - p_close), p_close).astype('float32')
-        # Add the overnight gap to the new columns dictionary.
-        self.new_columns['overnight_gap'] = overnight_gap
+        self.new_columns['overnight_gap']= divide((today_open - p_close), p_close).astype('float32')
+        # Number of days since the last trade.
+        current_times = to_datetime(self.data['t'], unit = 'ms')
+        # Timestamps for the previous trade.
+        previous_times = current_times.shift(1)
+        # Calculate the absolute difference between the current and previous timestamp. Also, use backfill (`bfill`) to replace NaT values with the next possible value.
+        time_since_last_trade = abs(current_times - previous_times).bfill().dt.days.astype('int32')
+        # Add the time since the last trade for every row to the new columns dictionary. Convert to numpy array to keep consistent with other features.
+        self.new_columns['time_since_last_trade'] = time_since_last_trade.values
 
     def add_lagged_features(self):
         # Display informational message to stdout.
