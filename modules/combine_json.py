@@ -42,13 +42,15 @@ def parse(filename):
         # Return bool False.
         return False
     # Convert the JSON dictionaries for each timepoint into a pandas DataFrame.
-    contents = [DataFrame(entry, index = [0]) for entry in results]
+    data = [DataFrame(entry, index = [0]) for entry in results]
     # Concatenate all DataFrames into one.
-    contents = concat(contents, axis = 0).reset_index(drop = True)
+    data = concat(data, axis = 0).reset_index(drop = True)
     # Add the filename as another column.
-    contents['f'] = filename.stem
-    # Return the $contents DataFrame.
-    return contents
+    data['f'] = filename.stem
+    # Remove duplicate rows, if any exist.
+    data = data.drop_duplicates(keep = 'first')
+    # Return the DataFrame.
+    return data
 
 ############
 ### MAIN ###
