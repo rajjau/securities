@@ -48,7 +48,7 @@ def parse(filename):
     # Add the filename as another column.
     data['f'] = filename.stem
     # Remove duplicate rows, if any exist.
-    data = data.drop_duplicates(keep = 'first')
+    data = data.drop_duplicates(keep = 'first').reset_index(drop = True)
     # Return the DataFrame.
     return data
 
