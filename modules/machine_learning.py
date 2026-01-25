@@ -204,7 +204,7 @@ def train_predict_rolling(model, X_train, y_train, X_test, y_test, retrain_step_
 ############
 ### MAIN ###
 ############
-def main(X_train, y_train, X_test, y_test, name, tickers, random_state, configuration_ini, learners_yaml):
+def main(X_train, y_train, X_test, y_test, name, random_state, configuration_ini, learners_yaml):
     # Obtain number of cross-validation folds from configuration file.
     cross_validation_folds = configuration_ini.getint('ML', 'CROSS_VALIDATION_FOLDS')
     #--------------#
