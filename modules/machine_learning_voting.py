@@ -31,14 +31,16 @@ def filters(name, scores, configuration_ini):
     col_perf = f"{name} %"
     # Filter negative performance scores (if applicable).
     scores = scores.loc[scores[col_perf] > 0]
-    # Filter performance scores less than the median.
-    scores = scores.loc[scores[col_perf] >= scores[col_perf].median()]
     # Filter negative cross-validation scores (if applicable).
     scores = scores.loc[scores[COL_CROSSVAL] > 0]
     # Calculate the absolute difference between the performance of the model and its cross-validation score. Lower is better.
     scores[COL_GAP] = abs(scores[col_perf] - scores[COL_CROSSVAL]).astype('float32')
-    # Filter gaps that are greater than the median.
-    scores = scores.loc[scores[COL_GAP] <= scores[COL_GAP].median()]
+    # Check the total number of models available.
+    if len(scores) >= 20:
+        # Filter performance scores less than the median.
+        scores = scores.loc[scores[col_perf] >= scores[col_perf].median()]
+        # Filter gaps that are greater than the median.
+        scores = scores.loc[scores[COL_GAP] <= scores[COL_GAP].median()]
     # Sort the specific columns from most important to least. This is a scorer agnostic method of ranking.
     scores = scores.sort_values([COL_CROSSVAL_STDDEV, 'Gap'], ascending = True)
     # Define the total number of models left.
