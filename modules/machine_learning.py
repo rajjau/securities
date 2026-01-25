@@ -6,7 +6,7 @@ from pandas import concat
 from sklearn.base import clone
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import make_scorer
-from sklearn.model_selection import cross_val_score, RandomizedSearchCV, TimeSeriesSplit
+from sklearn.model_selection import cross_val_score, GridSearchCV, RandomizedSearchCV, TimeSeriesSplit
 from sklearn.pipeline import Pipeline
 from yaml import safe_load
 
@@ -128,13 +128,20 @@ def hyperparameter_optimization(X_train, y_train, pipeline, name, cross_validati
     # Set universal parameters on the pipeline.
     pipeline = set_universal_params(pipeline=pipeline, random_state=random_state)
     # Define the RandomizedSearchCV object using the TimeSeriesSplit object and the full pipeline.
-    search = RandomizedSearchCV(
+    # search = RandomizedSearchCV(
+    #     cv = timeseries_k_fold,
+    #     estimator = pipeline,
+    #     n_iter = 50,
+    #     n_jobs = -1,
+    #     param_distributions = params,
+    #     random_state = random_state,
+    #     scoring = scoring
+    # )
+    search = GridSearchCV(
         cv = timeseries_k_fold,
         estimator = pipeline,
-        n_iter = 50,
         n_jobs = -1,
-        param_distributions = params,
-        random_state = random_state,
+        param_grid = params,
         scoring = scoring
     )
     # Fit the model to the training data.
