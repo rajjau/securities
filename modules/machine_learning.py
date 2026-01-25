@@ -80,15 +80,11 @@ def build_pipeline(name, random_state, configuration_ini):
     return pipeline
 
 def set_universal_params(pipeline, random_state):
-    # Create a dictionary to hold parameters to update.
-    params = {}
     # Check if the model step exists to set its seed.
     try:
         pipeline.named_steps['model'].set_params(random_state = random_state)
     except (ValueError, AttributeError):
         pass
-    # Apply the parameters to the pipeline.
-    pipeline.set_params(**params)
     # Return the $pipeline.
     return pipeline
 
