@@ -31,6 +31,6 @@ class FeatureSelection(BaseEstimator, TransformerMixin):
         # Ensure we only return the columns selected during fitting.
         return X[self.selected_features]
 
-    def get_feature_names_out(self):
+    def get_feature_names_out(self, input_features=None):
         # Return the names of the selected features.
         return self.selected_features
