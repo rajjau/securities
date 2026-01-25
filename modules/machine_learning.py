@@ -1,18 +1,17 @@
 #!/usr/bin/env python
 from functools import partial
 from json import loads
-from numpy import inf
 from pandas import concat
 from sklearn.base import clone
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import make_scorer
 from sklearn.model_selection import cross_val_score, GridSearchCV, RandomizedSearchCV, TimeSeriesSplit
 from sklearn.pipeline import Pipeline
-from yaml import safe_load
 
 ######################
 ### CUSTOM MODULES ###
 ######################
+from modules.load_learners import main as load_learners
 from modules.dynamic_module_load import main as dynamic_module_load
 from modules.feature_selection_wrapper import FeatureSelection
 from modules.messages import msg_info, msg_warn
@@ -28,39 +27,10 @@ filterwarnings('ignore', category = FitFailedWarning)
 filterwarnings('ignore', category = LinAlgWarning)
 filterwarnings('ignore', category = UserWarning)
 
-################
-### LEARNERS ###
-################
-# Global dictionaries to store config
-learners = {}
-learners_hyperparameters = {}
-
-def load_learners(learners_yaml):
-    # Access the global dictionaries so they can be populated for use in other functions.
-    global learners, learners_hyperparameters
-    # Open the YAML file and load the 'LEARNERS' section into a configuration dictionary.
-    with open(learners_yaml, 'r') as f: config = safe_load(f)['LEARNERS']
-    # Iterate through each learner defined in the configuration.
-    for name, info in config.items():
-        # Import the module using the specified string.
-        module_class = dynamic_module_load(module_str=info['class'])        
-        # Extract the parameters from the configuration.
-        params = info.get('params', {})
-        # Instantiate the learner and store it in the global $learners dictionary.
-        learners[name] = module_class(**params)
-        # Extract the optimization parameters.
-        optimization_params = info.get('optimization', {})
-        # Check if the current learner is Logistic Regression to handle the infinity string conversion.
-        if name == 'Logistic Regression' and 'C' in optimization_params:
-            # Convert the '.inf' string from YAML into a float infinity value.
-            optimization_params['C'] = [inf if x == '.inf' else x for x in optimization_params['C']]
-        # Store the search grid in the global $learners_hyperparameters dictionary with the pipeline prefix.
-        learners_hyperparameters[name] = {f'model__{k}': v for k, v in optimization_params.items()}
-
 #################
 ### FUNCTIONS ###
 #################
-def build_pipeline(name, random_state, configuration_ini):
+def build_pipeline(name, learners, random_state, configuration_ini):
     # Dynamically load the normalization method.
     scaler = dynamic_module_load(module_str=configuration_ini.get('NORMALIZATION', 'NORMALIZE_METHOD'))()
     # Define the feature selection step.
@@ -88,7 +58,7 @@ def set_universal_params(pipeline, random_state):
     # Return the $pipeline.
     return pipeline
 
-def hyperparameter_optimization(X_train, y_train, pipeline, name, cross_validation_folds, random_state, scoring):
+def hyperparameter_optimization(X_train, y_train, pipeline, name, learners_hyperparameters, cross_validation_folds, random_state, scoring):
     try:
         # Obtain the parameters from the dictionary defined above.
         params = learners_hyperparameters[name].copy()
@@ -207,11 +177,13 @@ def main(X_train, y_train, X_test, y_test, name, random_state, configuration_ini
     #--- Models ---#
     #--------------#
     # Load configuration to populate global dictionaries.
-    load_learners(learners_yaml=learners_yaml)
+    learners, learners_hyperparameters = load_learners(learners_yaml=learners_yaml)
+    # Add the 'model__' prefix to each hyperparameter for compatibility with the pipeline.
+    learners_hyperparameters[name] = {f'model__{x}': y for x, y in learners_hyperparameters[name].items()}
     #---------------#
     #--- Pipeline --#
     #---------------#
-    pipeline = build_pipeline(name=name, random_state=random_state, configuration_ini=configuration_ini)
+    pipeline = build_pipeline(name=name, learners=learners, random_state=random_state, configuration_ini=configuration_ini)
     #----------------------#
     #--- Scoring Metric ---#
     #----------------------#
@@ -230,6 +202,7 @@ def main(X_train, y_train, X_test, y_test, name, random_state, configuration_ini
             y_train=y_train,
             pipeline=pipeline,
             name=name,
+            learners_hyperparameters=learners_hyperparameters,
             cross_validation_folds=configuration_ini.getint('ML', 'CROSS_VALIDATION_FOLDS'),
             random_state=random_state,
             scoring=make_scorer(score_func = scoring_metric, **scoring_metric_params)
