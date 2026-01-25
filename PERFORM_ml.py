@@ -90,7 +90,6 @@ def main(filename):
                 X_test=X_test,
                 y_test=y_test,
                 name=learner,
-                tickers=tickers,
                 random_state=seed,
                 configuration_ini=configuration_ini,
                 learners_yaml=LEARNERS_YAML
