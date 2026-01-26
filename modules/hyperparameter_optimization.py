@@ -15,7 +15,7 @@ from modules.messages import msg_error, msg_info, msg_warn
 BAGGING_LEARNER_NAME = 'Bagging'
 
 # Set the total number of iterations to use.
-N_ITER = 2
+N_ITER = 50
 
 # Set the random state for hyperparameter optimization.
 RANDOM_STATE = 0
@@ -121,21 +121,21 @@ def main(X_train, y_train, pipeline, name, learners, learners_hyperparameters, c
     #----------------------------#
     #--- Randomized Search CV ---#
     #----------------------------#
-    search = param_search_random(
-        timeseries_k_fold=timeseries_k_fold,
-        pipeline=pipeline,
-        params=params,
-        scoring=scoring
-    )
-    #--------------------------#
-    #--- Grid Search CV -------#
-    #--------------------------#
-    # search = param_search_grid(
+    # search = param_search_random(
     #     timeseries_k_fold=timeseries_k_fold,
     #     pipeline=pipeline,
     #     params=params,
     #     scoring=scoring
     # )
+    #--------------------------#
+    #--- Grid Search CV -------#
+    #--------------------------#
+    search = param_search_grid(
+        timeseries_k_fold=timeseries_k_fold,
+        pipeline=pipeline,
+        params=params,
+        scoring=scoring
+    )
     # Fit the model to the training data.
     search.fit(X_train, y_train)
     # Identify the model with the best performance.
