@@ -2,12 +2,12 @@ LEARNERS:
   Bagging:
     class: sklearn.ensemble.BaggingClassifier
     params:
+      bootstrap: True
+      bootstrap_features: False
       n_jobs: -1
       n_estimators: 50
     optimization:
-      bootstrap: [True, False]
-      bootstrap_features: [True, False]
-      estimator_options: 
+      estimator:
         - Decision Tree
 
   Decision Tree:
