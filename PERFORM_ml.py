@@ -72,6 +72,26 @@ def main(filename):
     use_learners = convert_to_list(string=configuration_ini['ML']['USE_LEARNERS'], delimiter=',')
     # Iterate through each random seed.
     for learner in use_learners:
+        #...................................#
+        #... Hyperparameter Optimization ...#
+        #...................................#
+        # Create a border to denote a process.
+        border(message=f"HYPERPARAMETER OPTIMIZATION: {learner}", border_char='><')
+        # Perform hyperparameter optimization (if enabled).
+        pipeline_seed = machine_learning(
+            X_train=X_train,
+            y_train=y_train,
+            X_test=None,
+            y_test=None,
+            name=learner,
+            pipeline=None,
+            random_state=None,
+            configuration_ini=configuration_ini,
+            learners_yaml=LEARNERS_YAML
+        )
+        #................#
+        #... Training ...#
+        #................#
         # Create a border to denote a process.
         border(f"MACHINE LEARNING: {learner}", border_char='><')
         # Initialize accumulators to zero at the start of each learner's seed loop.
@@ -84,12 +104,13 @@ def main(filename):
             # Message to stdout.
             msg_info(f"Seed {seed}")
             # Perform machine learning.
-            score_seed, score_cv_seed, score_cv_stddev_seed, pipeline_seed = machine_learning(
+            pipeline_seed, score_seed, score_cv_seed, score_cv_stddev_seed = machine_learning(
                 X_train=X_train,
                 y_train=y_train,
                 X_test=X_test,
                 y_test=y_test,
                 name=learner,
+                pipeline=pipeline_seed,
                 random_state=seed,
                 configuration_ini=configuration_ini,
                 learners_yaml=LEARNERS_YAML
