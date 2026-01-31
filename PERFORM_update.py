@@ -58,8 +58,8 @@ def days(last):
     if today <= last:
         # If so, then display a message to stdout.
         msg_info(f"The data is up-to-date. The last entry was on: {last.strftime('%A, %B %d %Y')}.")
-        # Return bool False.
-        return False
+        # Exit without error.
+        exit(0)
     else:
         # Otherwise, return a tuple of the last date and today's date in YYYY-MM-DD format.
         return (last.strftime('%Y-%m-%d'), today.strftime('%Y-%m-%d'))
