@@ -26,7 +26,7 @@ Develop a machine learning (ML) model to predict whether the closing price of a 
 
         - For example, a dataset contains 1,000 total days where the initial training data ranges from days 1- 100 and the initial test dataset ranges from days 101-200. The `sliding_window_size` = 100 and `retrain_step_frequency` = 10. The model will first be trained on days 1-100 and predicts on days 101-110. Then, it will retrain on days 11-110 and predicts on days 111-120. It continues by retraining on days 21-120 and predicting on days 121-130. This process continues until the prediction range hits day 1,000.
 
-    - The Matthews Correlation Coefficient (MCC) score is used to assess each model's performance within every sliding window. Additionally, if cross-validation (CV) is enabled, then scikit-learn's TimeSeriesSplit method is used.
+        - The Matthews Correlation Coefficient (MCC) score is used to assess each model's performance within every sliding window. Additionally, if cross-validation (CV) is enabled, then scikit-learn's TimeSeriesSplit method is used.
 
     - After the MCC score and CV (if applicable) are obtained from every random seed, the final step is to pass this data to the VotingClassifier.
 
