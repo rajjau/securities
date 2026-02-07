@@ -16,7 +16,7 @@ root = Path(argv[0]).parent.absolute()
 ######################
 from modules.create_directory import main as create_directory
 from modules.messages import msg_warn
-from modules.polygon_io import main as polygon_io
+from modules.massive_com import main as massive_com
 
 #################
 ### FUNCTIONS ###
@@ -100,8 +100,8 @@ def main(dir_data, dates):
     if dir_data: create_directory(dir_data, fail_if_exists = False)
     # Parse the specified $dates and convert into datetime objects. If both a starting and ending date was specified by user, then exapnd the $dates tuple to include all intermediate dates, excluding weekends.
     dates = date(dates)()
-    # Download the data for the specified stock $tickers from Polygon.io in JSON format. Returns a list of all newly downloaded data JSON files.
-    filenames_output = polygon_io(dir_data = dir_data, dates = dates)
+    # Download the data for the specified stock $tickers from Massive.com in JSON format. Returns a list of all newly downloaded data JSON files.
+    filenames_output = massive_com(dir_data = dir_data, dates = dates)
     # Return the list of JSON data files.
     return(filenames_output)
 
