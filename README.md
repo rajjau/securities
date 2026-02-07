@@ -30,7 +30,7 @@ Develop a machine learning (ML) model to predict whether the closing price of a 
 
     - After the MCC score and CV (if applicable) are obtained from every random seed, the final step is to pass this data to the VotingClassifier.
 
-        - Low quality random seed models are filtered out if they contain negative peformance (including within CV). Additionally, a performance gap is calculate based on the absolute difference between the MCC score and CV score for each random seed (lower is better). Models whose performance is greater than the median performance gap are filtered as well. The models are sorted based on their performance gap from best to worst, and the top K models are kept.
+        - Low quality random seed models are filtered out if they contain negative peformance (including within CV). Additionally, a performance gap is calculated: | MCC score - CV score | for each random seed (lower is better). Models whose performance is greater than the median performance gap are filtered as well. The models are sorted based on their performance gap from best to worst, and the top K models are kept.
 
         - The remaining models are used to create the VotingClassifier, and training is once again performed using the rolling window walk-forward validation method. Note that the final sliding window, the most recent days, are used to train the output model.
 
