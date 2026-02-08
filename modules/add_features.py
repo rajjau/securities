@@ -50,6 +50,8 @@ class FeatureEngineering:
         self.add_overnight_features()
         # Lagged features.
         self.add_lagged_features()
+        # Moving average features.
+        self.add_moving_average_features()
         # Merge the new feature dictionary into a dataframe and join with original data.
         self.data = concat([self.data, DataFrame(self.new_columns, index = self.data.index)], axis = 1)
         # Create a copy of the dataframe to resolve fragmentation and consolidate memory.
@@ -107,9 +109,21 @@ class FeatureEngineering:
         # Iterate through each lagged column.
         for column in lagged_features.columns:
             # Define the new column name for the lagged feature.
-            name = f"{column.replace('_', '_lag_')}"
+            name = f"{column}_lag"
             # Add the lagged feature to the new columns dictionary.
             self.new_columns[name] = lagged_features[column].values
+
+    def add_moving_average_features(self):
+        # Display informational message to stdout.
+        msg_info("Features: Moving Average.")
+        # Calculate the simple moving average (SMA) and then determine the ratio: Close / SMA. 
+        for window in MOVING_AVERAGE_WINDOWS:
+            # The window here looks from $window days from yesterday. So if window = 3, then it calculates the mean of the 5 close prices starting from yesterday. This includes: [yesterday, yesterday-1, yeserday-2].
+            sma = self.prev_close.rolling(window = window).mean()
+            # Define the column name.
+            name = f"distance_sma_{window}"
+            # A ratio > 1.0 means price is above the average while < 1.0 means below.
+            self.new_columns[name] = divide(self.prev_close, sma).astype('float32').values
 
 ############
 ### MAIN ###
